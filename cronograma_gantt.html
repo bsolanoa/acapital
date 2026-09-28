@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Cronograma Alicapital — NTT vs Veritas Prime</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --panel: #ffffff;
+    --ink: #1b2330;
+    --muted: #6b7280;
+    --grid: #eceff3;
+    --weekend: #f0f1f4;
+    --today: #ef4444;
+    --ntt-phase: #2563eb;
+    --ntt-task: #93b7f5;
+    --ver-phase: #7c3aed;
+    --ver-task: #c4b0f5;
+    --critical: #dc2626;
+    --billing: #d97706;
+    --border: #e2e5ea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 16px; margin-bottom: 22px;
+    font-size: 12.5px; color: var(--muted);
+  }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
+  .diamond { width: 10px; height: 10px; transform: rotate(45deg); display: inline-block; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 28px;
+    overflow: hidden;
+  }
+  .panel-head {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-head-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .panel-head h2 { margin: 0; font-size: 15px; }
+  .panel-head .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .panel-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+  .btn-mini {
+    font: inherit; font-size: 11.5px; color: var(--muted); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; cursor: pointer;
+  }
+  .btn-mini:hover { background: var(--grid); color: var(--ink); }
+  .scroll-wrap { overflow-x: auto; }
+  .chart {
+    position: relative;
+    display: flex;
+  }
+  .labels-col {
+    flex: 0 0 340px;
+    position: sticky;
+    left: 0;
+    background: var(--panel);
+    z-index: 3;
+    border-right: 1px solid var(--border);
+  }
+  .labels-col .row-line { display: flex; align-items: center; height: 30px; border-bottom: 1px solid var(--grid); padding: 0 10px; }
+  .labels-col .header-spacer { height: 54px; border-bottom: 1px solid var(--border); }
+  .lbl { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12.5px; }
+  .lbl .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .phase > .lbl .txt { font-weight: 700; }
+  .caret {
+    flex: 0 0 14px; width: 14px; text-align: center; font-size: 10px; color: var(--muted);
+    cursor: pointer; user-select: none; transition: transform .15s; border-radius: 3px;
+  }
+  .caret:hover { color: var(--ink); background: var(--grid); }
+  .caret.caret-empty { visibility: hidden; cursor: default; }
+  .row-line.collapsed .caret { transform: rotate(-90deg); }
+  .note { display: none; }
+  .timeline-col { position: relative; }
+  .month-row, .day-row { display: flex; }
+  .month-cell {
+    font-size: 11.5px; font-weight: 700; color: var(--muted);
+    padding: 6px 0 4px 6px; border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  .day-row { border-bottom: 1px solid var(--border); }
+  .day-cell {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--muted); height: 30px; border-right: 1px solid var(--grid);
+  }
+  .day-cell .dow { font-size: 8.5px; opacity: .7; }
+  .day-cell .dnum { font-size: 11px; font-weight: 600; }
+  .day-cell.weekend { background: var(--weekend); }
+  .day-cell.is-today { background: #fee2e2; color: var(--today); font-weight: 700; }
+  .rows-area { position: relative; }
+  .grid-bg { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+  .gridcol { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--grid); }
+  .gridcol.weekend { background: var(--weekend); }
+  .gridcol.today-col { background: rgba(239,68,68,0.06); }
+  .row-line, .row-wrap { position: relative; height: 30px; border-bottom: 1px solid var(--grid); cursor: default; }
+  .bar { position: absolute; top: 6px; height: 18px; border-radius: 5px; cursor: default; }
+  .row-line.row-hover { background: rgba(219,39,119,0.08); }
+  .row-wrap.row-hover { background: rgba(219,39,119,0.10); }
+  .bar.row-hover { background: #db2777 !important; box-shadow: 0 0 0 3px rgba(219,39,119,0.35) !important; }
+  .bar-phase { background: var(--ntt-phase); opacity: .92; }
+  .bar-task { background: var(--ntt-task); }
+  .bar-critical { background: var(--critical); box-shadow: 0 0 0 2px rgba(220,38,38,0.25); }
+  .bar-billing { background: var(--billing); }
+  .bar-preproject { background: repeating-linear-gradient(45deg, var(--ntt-task), var(--ntt-task) 4px, #ffffff 4px, #ffffff 8px); }
+  .bar-done { background: #16a34a; }
+  .milestone-mark {
+    top: 4px; width: 20px; height: 20px; margin-left: -10px;
+    background: #f59e0b; transform: rotate(45deg); border-radius: 3px;
+    box-shadow: 0 0 0 2px rgba(245,158,11,0.25);
+  }
+  #ver .bar-phase { background: var(--ver-phase); opacity: .92; }
+  #ver .bar-task { background: var(--ver-task); }
+  .vmark {
+    position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px dashed;
+    z-index: 2;
+  }
+  .vmark span {
+    position: absolute; top: -2px; left: 4px; font-size: 10px; white-space: nowrap;
+    background: rgba(255,255,255,0.9); padding: 1px 4px; border-radius: 4px;
+  }
+  .mark-ntt { border-color: #2563eb; }
+  .mark-ntt span { color: #2563eb; }
+  .mark-ver { border-color: #7c3aed; }
+  .mark-ver span { color: #7c3aed; top: 12px; }
+  .today-marker {
+    position: absolute; top: 0; bottom: 0; width: 2px; background: var(--today);
+    transform: translateX(-50%); z-index: 8; cursor: ew-resize; opacity: 0;
+    transition: opacity .12s, background-color .12s;
+  }
+  .today-marker.ready { opacity: 1; }
+  .today-marker::after {
+    content: ''; position: absolute; top: 0; bottom: 0; left: -6px; width: 14px;
+  }
+  .today-marker .flag {
+    position: absolute; top: -2px; left: 4px; transform: translateY(-100%);
+    background: var(--today); color: #fff; font-size: 10.5px; font-weight: 700;
+    padding: 2px 7px; border-radius: 5px 5px 5px 2px; white-space: nowrap;
+    pointer-events: none;
+  }
+  body.marker-dragging { cursor: ew-resize; user-select: none; }
+  body.marker-dragging .today-marker { background: #b91c1c; }
+  body.marker-dragging .today-marker .flag { background: #b91c1c; }
+  .risk-box {
+    margin: 0 0 22px; padding: 14px 18px; background: #fef2f2; border: 1px solid #fecaca;
+    border-radius: 10px; font-size: 13px; line-height: 1.5;
+  }
+  .risk-box b { color: #b91c1c; }
+</style>
+</head>
+<body>
+
+<h1>Cronograma Alicapital — NTT (FI) vs Veritas Prime (HCM)</h1>
+<div class="subtitle">Eje temporal compartido: 08/09/2026 → 13/10/2026. La línea roja marca <span id="todayText">el día de hoy (América/Lima)</span> y es arrastrable — muévela para comparar cualquier fecha de referencia contra ambos cronogramas.</div>
+
+<div class="risk-box">
+  <b>Riesgo de secuencia FI → HCM:</b> Veritas Prime empieza a configurar la Entidad Legal en Employee Central y el mapeo de integración a S/4HANA el 15/09, casi dos semanas antes de que NTT despliegue la sociedad a S/4 productivo (30/09). El Go-Live de HCM (01/10) queda a solo 1 día del Despliegue a PRD de FI (30/09). Tareas marcadas en <b style="color:#dc2626">rojo</b> son las críticas de este traslape.
+</div>
+
+<div class="legend">
+  <div class="item"><span class="swatch" style="background:var(--ntt-phase)"></span>Fase NTT</div>
+  <div class="item"><span class="swatch" style="background:var(--ntt-task)"></span>Tarea NTT</div>
+  <div class="item"><span class="swatch" style="background:var(--ver-phase)"></span>Fase Veritas Prime</div>
+  <div class="item"><span class="swatch" style="background:var(--ver-task)"></span>Tarea Veritas Prime</div>
+  <div class="item"><span class="swatch" style="background:var(--billing)"></span>Hito de facturación (NTT)</div>
+  <div class="item"><span class="swatch" style="background:var(--critical)"></span>Tarea crítica / riesgo de secuencia</div>
+  <div class="item"><span class="diamond" style="background:#f59e0b"></span>Hito</div>
+  <div class="item"><span class="swatch" style="background:repeating-linear-gradient(45deg,#93b7f5,#93b7f5 3px,#fff 3px,#fff 6px)"></span>Inicia antes del Kick-off</div>
+</div>
+
+<div class="panel" id="ntt">
+  <div class="panel-head">
+    <div class="panel-head-top">
+      <h2>NTT — MDA0000056156 · BTM 526 · Nueva Sociedad Peruana Alicapital (SPV) — Configuración FI</h2>
+      <div class="panel-actions">
+        <button class="btn-mini expand-all" type="button">Expandir todo</button>
+        <button class="btn-mini collapse-all" type="button">Colapsar todo</button>
+      </div>
+    </div>
+    <div class="meta">08/09/2026 → 13/10/2026 · Fuente: cronograma ntt alicapital.xlsx</div>
+  </div>
+  <div class="scroll-wrap">
+    <div class="chart" style="width:1564px">
+      <div class="labels-col">
+        <div class="header-spacer"></div>
+        <div class="row-line lvl0 phase" data-row="0" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="0">▾</span><span class="txt">Planificación</span></span></div><div class="row-line lvl1 task" data-row="1" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Envío de plan de Trabajo</span></span></div><div class="row-line lvl1 task" data-row="2" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">VB Plan de Trabajo</span></span></div><div class="row-line lvl1 task" data-row="3" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Kick Off / Step One</span></span></div><div class="row-line lvl0 phase billing" data-row="4" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="4">▾</span><span class="txt">Facturación (hitos contractuales)</span></span></div><div class="row-line lvl1 milestone billing" data-row="5" data-parent="4"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Hito 1 – Especif. Funcional 50% (HES/CA)</span></span></div><div class="row-line lvl1 milestone billing" data-row="6" data-parent="4"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Hito 2 – Go Live liberación 50% (HES/CA)</span></span></div><div class="row-line lvl0 phase" data-row="7" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="7">▾</span><span class="txt">Ejecución</span></span></div><div class="row-line lvl1 phase sub" data-row="8" data-parent="7"><span class="lbl" style="padding-left:18px"><span class="caret" data-toggle="8">▾</span><span class="txt">Diseño</span></span></div><div class="row-line lvl2 task" data-row="9" data-parent="8"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">Análisis y Diseño</span></span></div><div class="row-line lvl2 milestone" data-row="10" data-parent="8"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">Elaboración Especificación Funcional</span></span></div><div class="row-line lvl2 milestone" data-row="11" data-parent="8"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">Envío de Especificación Funcional</span></span></div><div class="row-line lvl2 task" data-row="12" data-parent="8"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">Reunión de revisión Especif. Funcional</span></span></div><div class="row-line lvl2 task" data-row="13" data-parent="8"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">VB Especificación Funcional</span></span></div><div class="row-line lvl1 phase sub" data-row="14" data-parent="7"><span class="lbl" style="padding-left:18px"><span class="caret" data-toggle="14">▾</span><span class="txt">Construcción</span></span></div><div class="row-line lvl2 task preproject" data-row="15" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">Construcción Funcional</span></span></div><div class="row-line lvl2 task" data-row="16" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">Construcción de Roles (prep. Seguridad/Riesgo Op.)</span></span></div><div class="row-line lvl2 task" data-row="17" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">Presentación Propuesta de Roles</span></span></div><div class="row-line lvl2 task" data-row="18" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">VB Seguridad: Propuesta</span></span></div><div class="row-line lvl2 task" data-row="19" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">VB Riesgo Operacional: Roles</span></span></div><div class="row-line lvl2 task" data-row="20" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">Envío de listado de Process Owners</span></span></div><div class="row-line lvl0 phase" data-row="21" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="21">▾</span><span class="txt">Transición</span></span></div><div class="row-line lvl1 milestone" data-row="22" data-parent="21"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Envío EFT y Plan de Cut-over</span></span></div><div class="row-line lvl1 task" data-row="23" data-parent="21"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Aprobaciones TI Alicorp: EFT y Cutover</span></span></div><div class="row-line lvl1 task" data-row="24" data-parent="21"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Solicitud aprob. Sponsor/Process Owner/Data Owner</span></span></div><div class="row-line lvl1 task" data-row="25" data-parent="21"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">VB aprob. Sponsor/Process Owner/Data Owner</span></span></div><div class="row-line lvl1 task" data-row="26" data-parent="21"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Aprobación Operaciones Alicorp</span></span></div><div class="row-line lvl1 task" data-row="27" data-parent="21"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Aprobación del Comité de Cambios (CCB)</span></span></div><div class="row-line lvl0 phase" data-row="28" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="28">▾</span><span class="txt">Go Live</span></span></div><div class="row-line lvl1 task" data-row="29" data-parent="28"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Configuración en DE2</span></span></div><div class="row-line lvl1 task critical" data-row="30" data-parent="28"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Despliegue a PRD</span></span></div><div class="row-line lvl1 task" data-row="31" data-parent="28"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Soporte Post PRD</span></span></div><div class="row-line lvl1 milestone" data-row="32" data-parent="28"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Correo de conformidad en PRD</span></span></div><div class="row-line lvl1 milestone" data-row="33" data-parent="28"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Transferencia a Equipo Soporte</span></span></div><div class="row-line lvl1 task" data-row="34" data-parent="28"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Envío de Acta de KT</span></span></div><div class="row-line lvl0 phase" data-row="35" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="35">▾</span><span class="txt">Cierre de Proyecto</span></span></div><div class="row-line lvl1 task" data-row="36" data-parent="35"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Envío de Acta de cierre de Proyecto</span></span></div><div class="row-line lvl1 milestone" data-row="37" data-parent="35"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Cierre de proyecto</span></span></div>
+      </div>
+      <div class="timeline-col" style="width:1224px">
+        <div class="month-row"><div class="month-cell" style="width:782px">September 2026</div><div class="month-cell" style="width:442px">October 2026</div></div><div class="day-row"><div class="day-cell" data-date="2026-09-08" style="width:34px"><span class="dow">M</span><span class="dnum">8</span></div><div class="day-cell" data-date="2026-09-09" style="width:34px"><span class="dow">X</span><span class="dnum">9</span></div><div class="day-cell" data-date="2026-09-10" style="width:34px"><span class="dow">J</span><span class="dnum">10</span></div><div class="day-cell" data-date="2026-09-11" style="width:34px"><span class="dow">V</span><span class="dnum">11</span></div><div class="day-cell weekend" data-date="2026-09-12" style="width:34px"><span class="dow">S</span><span class="dnum">12</span></div><div class="day-cell weekend" data-date="2026-09-13" style="width:34px"><span class="dow">D</span><span class="dnum">13</span></div><div class="day-cell" data-date="2026-09-14" style="width:34px"><span class="dow">L</span><span class="dnum">14</span></div><div class="day-cell" data-date="2026-09-15" style="width:34px"><span class="dow">M</span><span class="dnum">15</span></div><div class="day-cell" data-date="2026-09-16" style="width:34px"><span class="dow">X</span><span class="dnum">16</span></div><div class="day-cell" data-date="2026-09-17" style="width:34px"><span class="dow">J</span><span class="dnum">17</span></div><div class="day-cell" data-date="2026-09-18" style="width:34px"><span class="dow">V</span><span class="dnum">18</span></div><div class="day-cell weekend" data-date="2026-09-19" style="width:34px"><span class="dow">S</span><span class="dnum">19</span></div><div class="day-cell weekend" data-date="2026-09-20" style="width:34px"><span class="dow">D</span><span class="dnum">20</span></div><div class="day-cell" data-date="2026-09-21" style="width:34px"><span class="dow">L</span><span class="dnum">21</span></div><div class="day-cell" data-date="2026-09-22" style="width:34px"><span class="dow">M</span><span class="dnum">22</span></div><div class="day-cell" data-date="2026-09-23" style="width:34px"><span class="dow">X</span><span class="dnum">23</span></div><div class="day-cell" data-date="2026-09-24" style="width:34px"><span class="dow">J</span><span class="dnum">24</span></div><div class="day-cell" data-date="2026-09-25" style="width:34px"><span class="dow">V</span><span class="dnum">25</span></div><div class="day-cell weekend" data-date="2026-09-26" style="width:34px"><span class="dow">S</span><span class="dnum">26</span></div><div class="day-cell weekend" data-date="2026-09-27" style="width:34px"><span class="dow">D</span><span class="dnum">27</span></div><div class="day-cell" data-date="2026-09-28" style="width:34px"><span class="dow">L</span><span class="dnum">28</span></div><div class="day-cell" data-date="2026-09-29" style="width:34px"><span class="dow">M</span><span class="dnum">29</span></div><div class="day-cell" data-date="2026-09-30" style="width:34px"><span class="dow">X</span><span class="dnum">30</span></div><div class="day-cell" data-date="2026-10-01" style="width:34px"><span class="dow">J</span><span class="dnum">1</span></div><div class="day-cell" data-date="2026-10-02" style="width:34px"><span class="dow">V</span><span class="dnum">2</span></div><div class="day-cell weekend" data-date="2026-10-03" style="width:34px"><span class="dow">S</span><span class="dnum">3</span></div><div class="day-cell weekend" data-date="2026-10-04" style="width:34px"><span class="dow">D</span><span class="dnum">4</span></div><div class="day-cell" data-date="2026-10-05" style="width:34px"><span class="dow">L</span><span class="dnum">5</span></div><div class="day-cell" data-date="2026-10-06" style="width:34px"><span class="dow">M</span><span class="dnum">6</span></div><div class="day-cell" data-date="2026-10-07" style="width:34px"><span class="dow">X</span><span class="dnum">7</span></div><div class="day-cell" data-date="2026-10-08" style="width:34px"><span class="dow">J</span><span class="dnum">8</span></div><div class="day-cell" data-date="2026-10-09" style="width:34px"><span class="dow">V</span><span class="dnum">9</span></div><div class="day-cell weekend" data-date="2026-10-10" style="width:34px"><span class="dow">S</span><span class="dnum">10</span></div><div class="day-cell weekend" data-date="2026-10-11" style="width:34px"><span class="dow">D</span><span class="dnum">11</span></div><div class="day-cell" data-date="2026-10-12" style="width:34px"><span class="dow">L</span><span class="dnum">12</span></div><div class="day-cell" data-date="2026-10-13" style="width:34px"><span class="dow">M</span><span class="dnum">13</span></div></div>
+        <div class="rows-area">
+          <div class="grid-bg"><div class="gridcol" data-date="2026-09-08" style="left:0px;width:34px"></div><div class="gridcol" data-date="2026-09-09" style="left:34px;width:34px"></div><div class="gridcol" data-date="2026-09-10" style="left:68px;width:34px"></div><div class="gridcol" data-date="2026-09-11" style="left:102px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-12" style="left:136px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-13" style="left:170px;width:34px"></div><div class="gridcol" data-date="2026-09-14" style="left:204px;width:34px"></div><div class="gridcol" data-date="2026-09-15" style="left:238px;width:34px"></div><div class="gridcol" data-date="2026-09-16" style="left:272px;width:34px"></div><div class="gridcol" data-date="2026-09-17" style="left:306px;width:34px"></div><div class="gridcol" data-date="2026-09-18" style="left:340px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-19" style="left:374px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-20" style="left:408px;width:34px"></div><div class="gridcol" data-date="2026-09-21" style="left:442px;width:34px"></div><div class="gridcol" data-date="2026-09-22" style="left:476px;width:34px"></div><div class="gridcol" data-date="2026-09-23" style="left:510px;width:34px"></div><div class="gridcol" data-date="2026-09-24" style="left:544px;width:34px"></div><div class="gridcol" data-date="2026-09-25" style="left:578px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-26" style="left:612px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-27" style="left:646px;width:34px"></div><div class="gridcol" data-date="2026-09-28" style="left:680px;width:34px"></div><div class="gridcol" data-date="2026-09-29" style="left:714px;width:34px"></div><div class="gridcol" data-date="2026-09-30" style="left:748px;width:34px"></div><div class="gridcol" data-date="2026-10-01" style="left:782px;width:34px"></div><div class="gridcol" data-date="2026-10-02" style="left:816px;width:34px"></div><div class="gridcol weekend" data-date="2026-10-03" style="left:850px;width:34px"></div><div class="gridcol weekend" data-date="2026-10-04" style="left:884px;width:34px"></div><div class="gridcol" data-date="2026-10-05" style="left:918px;width:34px"></div><div class="gridcol" data-date="2026-10-06" style="left:952px;width:34px"></div><div class="gridcol" data-date="2026-10-07" style="left:986px;width:34px"></div><div class="gridcol" data-date="2026-10-08" style="left:1020px;width:34px"></div><div class="gridcol" data-date="2026-10-09" style="left:1054px;width:34px"></div><div class="gridcol weekend" data-date="2026-10-10" style="left:1088px;width:34px"></div><div class="gridcol weekend" data-date="2026-10-11" style="left:1122px;width:34px"></div><div class="gridcol" data-date="2026-10-12" style="left:1156px;width:34px"></div><div class="gridcol" data-date="2026-10-13" style="left:1190px;width:34px"></div></div>
+          <div class="row-wrap" data-row="0" data-parent="-1"><div class="bar bar-phase" data-row="0" style="left:34px;width:234px" title="Planificación: 09/09/2026 → 15/09/2026"></div></div><div class="row-wrap" data-row="1" data-parent="0"><div class="bar bar-task" data-row="1" style="left:34px;width:30px" title="Envío de plan de Trabajo: 09/09/2026 → 09/09/2026"></div></div><div class="row-wrap" data-row="2" data-parent="0"><div class="bar bar-task" data-row="2" style="left:68px;width:30px" title="VB Plan de Trabajo: 10/09/2026 → 10/09/2026"></div></div><div class="row-wrap" data-row="3" data-parent="0"><div class="bar bar-task" data-row="3" style="left:238px;width:30px" title="Kick Off / Step One: 15/09/2026 → 15/09/2026"></div></div><div class="row-wrap" data-row="4" data-parent="-1"><div class="bar bar-phase bar-billing" data-row="4" style="left:204px;width:574px" title="Facturación (hitos contractuales): 14/09/2026 → 30/09/2026"></div></div><div class="row-wrap" data-row="5" data-parent="4"><div class="bar milestone-mark" data-row="5" style="left:204px" title="Hito 1 – Especif. Funcional 50% (HES/CA): 14/09/2026"></div></div><div class="row-wrap" data-row="6" data-parent="4"><div class="bar milestone-mark" data-row="6" style="left:748px" title="Hito 2 – Go Live liberación 50% (HES/CA): 30/09/2026"></div></div><div class="row-wrap" data-row="7" data-parent="-1"><div class="bar bar-phase" data-row="7" style="left:0px;width:540px" title="Ejecución: 08/09/2026 → 23/09/2026"></div></div><div class="row-wrap" data-row="8" data-parent="7"><div class="bar bar-phase" data-row="8" style="left:102px;width:200px" title="Diseño: 11/09/2026 → 16/09/2026"></div></div><div class="row-wrap" data-row="9" data-parent="8"><div class="bar bar-task" data-row="9" style="left:102px;width:132px" title="Análisis y Diseño: 11/09/2026 → 14/09/2026"></div></div><div class="row-wrap" data-row="10" data-parent="8"><div class="bar milestone-mark" data-row="10" style="left:204px" title="Elaboración Especificación Funcional: 14/09/2026"></div></div><div class="row-wrap" data-row="11" data-parent="8"><div class="bar milestone-mark" data-row="11" style="left:204px" title="Envío de Especificación Funcional: 14/09/2026"></div></div><div class="row-wrap" data-row="12" data-parent="8"><div class="bar bar-task" data-row="12" style="left:238px;width:30px" title="Reunión de revisión Especif. Funcional: 15/09/2026 → 15/09/2026"></div></div><div class="row-wrap" data-row="13" data-parent="8"><div class="bar bar-task" data-row="13" style="left:272px;width:30px" title="VB Especificación Funcional: 16/09/2026 → 16/09/2026"></div></div><div class="row-wrap" data-row="14" data-parent="7"><div class="bar bar-phase" data-row="14" style="left:0px;width:540px" title="Construcción: 08/09/2026 → 23/09/2026"></div></div><div class="row-wrap" data-row="15" data-parent="14"><div class="bar bar-task bar-preproject" data-row="15" style="left:0px;width:64px" title="Construcción Funcional: 08/09/2026 → 09/09/2026 — Inicia antes del Kick-off (15/09)"></div></div><div class="row-wrap" data-row="16" data-parent="14"><div class="bar bar-task" data-row="16" style="left:306px;width:64px" title="Construcción de Roles (prep. Seguridad/Riesgo Op.): 17/09/2026 → 18/09/2026"></div></div><div class="row-wrap" data-row="17" data-parent="14"><div class="bar bar-task" data-row="17" style="left:442px;width:30px" title="Presentación Propuesta de Roles: 21/09/2026 → 21/09/2026"></div></div><div class="row-wrap" data-row="18" data-parent="14"><div class="bar bar-task" data-row="18" style="left:442px;width:30px" title="VB Seguridad: Propuesta: 21/09/2026 → 21/09/2026"></div></div><div class="row-wrap" data-row="19" data-parent="14"><div class="bar bar-task" data-row="19" style="left:476px;width:30px" title="VB Riesgo Operacional: Roles: 22/09/2026 → 22/09/2026"></div></div><div class="row-wrap" data-row="20" data-parent="14"><div class="bar bar-task" data-row="20" style="left:476px;width:64px" title="Envío de listado de Process Owners: 22/09/2026 → 23/09/2026"></div></div><div class="row-wrap" data-row="21" data-parent="-1"><div class="bar bar-phase" data-row="21" style="left:476px;width:268px" title="Transición: 22/09/2026 → 29/09/2026"></div></div><div class="row-wrap" data-row="22" data-parent="21"><div class="bar milestone-mark" data-row="22" style="left:510px" title="Envío EFT y Plan de Cut-over: 23/09/2026"></div></div><div class="row-wrap" data-row="23" data-parent="21"><div class="bar bar-task" data-row="23" style="left:510px;width:64px" title="Aprobaciones TI Alicorp: EFT y Cutover: 23/09/2026 → 24/09/2026"></div></div><div class="row-wrap" data-row="24" data-parent="21"><div class="bar bar-task" data-row="24" style="left:476px;width:64px" title="Solicitud aprob. Sponsor/Process Owner/Data Owner: 22/09/2026 → 23/09/2026"></div></div><div class="row-wrap" data-row="25" data-parent="21"><div class="bar bar-task" data-row="25" style="left:510px;width:64px" title="VB aprob. Sponsor/Process Owner/Data Owner: 23/09/2026 → 24/09/2026"></div></div><div class="row-wrap" data-row="26" data-parent="21"><div class="bar bar-task" data-row="26" style="left:544px;width:64px" title="Aprobación Operaciones Alicorp: 24/09/2026 → 25/09/2026"></div></div><div class="row-wrap" data-row="27" data-parent="21"><div class="bar bar-task" data-row="27" style="left:578px;width:166px" title="Aprobación del Comité de Cambios (CCB): 25/09/2026 → 29/09/2026"></div></div><div class="row-wrap" data-row="28" data-parent="-1"><div class="bar bar-phase" data-row="28" style="left:714px;width:472px" title="Go Live: 29/09/2026 → 12/10/2026"></div></div><div class="row-wrap" data-row="29" data-parent="28"><div class="bar bar-task" data-row="29" style="left:714px;width:30px" title="Configuración en DE2: 29/09/2026 → 29/09/2026"></div></div><div class="row-wrap" data-row="30" data-parent="28"><div class="bar bar-critical" data-row="30" style="left:748px;width:30px" title="Despliegue a PRD: 30/09/2026 → 30/09/2026 — Go-live técnico real de la sociedad en FI/S4 productivo"></div></div><div class="row-wrap" data-row="31" data-parent="28"><div class="bar bar-task" data-row="31" style="left:782px;width:234px" title="Soporte Post PRD: 01/10/2026 → 07/10/2026"></div></div><div class="row-wrap" data-row="32" data-parent="28"><div class="bar milestone-mark" data-row="32" style="left:986px" title="Correo de conformidad en PRD: 07/10/2026"></div></div><div class="row-wrap" data-row="33" data-parent="28"><div class="bar milestone-mark" data-row="33" style="left:986px" title="Transferencia a Equipo Soporte: 07/10/2026"></div></div><div class="row-wrap" data-row="34" data-parent="28"><div class="bar bar-task" data-row="34" style="left:1054px;width:132px" title="Envío de Acta de KT: 09/10/2026 → 12/10/2026"></div></div><div class="row-wrap" data-row="35" data-parent="-1"><div class="bar bar-phase" data-row="35" style="left:1054px;width:166px" title="Cierre de Proyecto: 09/10/2026 → 13/10/2026"></div></div><div class="row-wrap" data-row="36" data-parent="35"><div class="bar bar-task" data-row="36" style="left:1054px;width:30px" title="Envío de Acta de cierre de Proyecto: 09/10/2026 → 09/10/2026"></div></div><div class="row-wrap" data-row="37" data-parent="35"><div class="bar milestone-mark" data-row="37" style="left:1190px" title="Cierre de proyecto: 13/10/2026"></div></div>
+          <div class="vmark mark-ntt" style="left:748px"><span>Despliegue a PRD (NTT)</span></div><div class="vmark mark-ver" style="left:782px"><span>Go-Live HCM (Veritas Prime)</span></div>
+          <div class="today-marker"><span class="flag">HOY</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="ver">
+  <div class="panel-head">
+    <div class="panel-head-top">
+      <h2>Veritas Prime — Proyecto Alicorp · Nueva Sociedad Alicapital — Configuración HCM (Employee Central / S/4)</h2>
+      <div class="panel-actions">
+        <button class="btn-mini expand-all" type="button">Expandir todo</button>
+        <button class="btn-mini collapse-all" type="button">Colapsar todo</button>
+      </div>
+    </div>
+    <div class="meta">14/09/2026 → 01/10/2026 · Fuente: Propuesta_Cronograma_Alicapital_Veritas.xlsx (aún "Propuesta PMO", no baseline aprobado)</div>
+  </div>
+  <div class="scroll-wrap">
+    <div class="chart" style="width:1564px">
+      <div class="labels-col">
+        <div class="header-spacer"></div>
+        <div class="row-line lvl0 phase" data-row="0" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="0">▾</span><span class="txt">1.0 Gestión de Proyecto, Gobierno y Control</span></span></div><div class="row-line lvl1 task status-done" data-row="1" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Handover Interno y Kick-off con Cliente</span></span></div><div class="row-line lvl1 task" data-row="2" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Análisis de situación actual</span></span></div><div class="row-line lvl1 task" data-row="3" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Sesión de descubrimiento de Proceso EC (0.5)</span></span></div><div class="row-line lvl1 task" data-row="4" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Especif. Funcional / Diseño / Reunión Key User</span></span></div><div class="row-line lvl1 milestone" data-row="5" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">HITO 1: Firma Especificación Funcional</span></span></div><div class="row-line lvl1 task" data-row="6" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Gestión de Riesgos y Gobernanza (NTT/Seidor)</span></span></div><div class="row-line lvl1 task" data-row="7" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Control del Log de Cambios RBP (Smartsheet)</span></span></div><div class="row-line lvl0 phase" data-row="8" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="8">▾</span><span class="txt">2.0 Configuración Employee Central</span></span></div><div class="row-line lvl1 task critical" data-row="9" data-parent="8"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Config. Entidad Legal Alicapital (FO/MDF) y Asoc.</span></span></div><div class="row-line lvl1 task" data-row="10" data-parent="8"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Reglas Job Info y Workflows (Cese/Recontratación)</span></span></div><div class="row-line lvl1 task" data-row="11" data-parent="8"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Roles y Permisos RBP (Target/Granting Groups)</span></span></div><div class="row-line lvl1 task" data-row="12" data-parent="8"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Pruebas Unitarias EC y Documentación CCB</span></span></div><div class="row-line lvl0 phase" data-row="13" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="13">▾</span><span class="txt">3.0 Performance & Goals (PMGM) – Uplift</span></span></div><div class="row-line lvl1 task" data-row="14" data-parent="13"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Route Maps y Jerarquía Multicompañía</span></span></div><div class="row-line lvl1 task" data-row="15" data-parent="13"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Reglas de Transferencia y Filtros XML</span></span></div><div class="row-line lvl1 task" data-row="16" data-parent="13"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Grupos Dinámicos y Permisos RBP Evaluadores</span></span></div><div class="row-line lvl1 task" data-row="17" data-parent="13"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Pruebas Unitarias PMGM y Documentación CCB</span></span></div><div class="row-line lvl0 phase" data-row="18" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="18">▾</span><span class="txt">4.0 Recruiting Management (RCM) – Uplift</span></span></div><div class="row-line lvl1 task" data-row="19" data-parent="18"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Integración Posición-Requisición y Herencia Attr.</span></span></div><div class="row-line lvl1 task" data-row="20" data-parent="18"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Requisiciones en curso – Alineación</span></span></div><div class="row-line lvl1 task" data-row="21" data-parent="18"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Permisos de Campo y Gobernanza RCM/RBP</span></span></div><div class="row-line lvl1 task" data-row="22" data-parent="18"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Pruebas Unitarias RCM y Documentación CCB</span></span></div><div class="row-line lvl0 phase" data-row="23" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="23">▾</span><span class="txt">5.0 Integrations (BIB) – Uplift</span></span></div><div class="row-line lvl1 task critical" data-row="24" data-parent="23"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Mapeo Integración S/4HANA (Nuevo Código/CECO)</span></span></div><div class="row-line lvl1 task" data-row="25" data-parent="23"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Ajuste de Regla Área de Nómina = 99</span></span></div><div class="row-line lvl1 task" data-row="26" data-parent="23"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Pruebas Unitarias Integración BIB y Doc. CCB</span></span></div><div class="row-line lvl0 phase" data-row="27" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="27">▾</span><span class="txt">6.0 Pruebas Integradas, UAT, CCB y Cutover</span></span></div><div class="row-line lvl1 milestone" data-row="28" data-parent="27"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">HITO 2: Cierre Config. y Desarrollo en Preview</span></span></div><div class="row-line lvl1 task" data-row="29" data-parent="27"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Pruebas Unitarias Integradas E2E (1 Empleado)</span></span></div><div class="row-line lvl1 task" data-row="30" data-parent="27"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Ventana de Pruebas UAT con Cliente (Máx 1h/mód.)</span></span></div><div class="row-line lvl1 milestone" data-row="31" data-parent="27"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">HITO 3: Firma de Aceptación UAT (Alicorp)</span></span></div><div class="row-line lvl1 task" data-row="32" data-parent="27"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Presentación y Aprobación CCB</span></span></div><div class="row-line lvl1 task critical" data-row="33" data-parent="27"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">Cutover y Transporte a Producción</span></span></div><div class="row-line lvl1 milestone critical" data-row="34" data-parent="27"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">HITO 4: Go-Live / Salida a Producción Alicapital</span></span></div>
+      </div>
+      <div class="timeline-col" style="width:1224px">
+        <div class="month-row"><div class="month-cell" style="width:782px">September 2026</div><div class="month-cell" style="width:442px">October 2026</div></div><div class="day-row"><div class="day-cell" data-date="2026-09-08" style="width:34px"><span class="dow">M</span><span class="dnum">8</span></div><div class="day-cell" data-date="2026-09-09" style="width:34px"><span class="dow">X</span><span class="dnum">9</span></div><div class="day-cell" data-date="2026-09-10" style="width:34px"><span class="dow">J</span><span class="dnum">10</span></div><div class="day-cell" data-date="2026-09-11" style="width:34px"><span class="dow">V</span><span class="dnum">11</span></div><div class="day-cell weekend" data-date="2026-09-12" style="width:34px"><span class="dow">S</span><span class="dnum">12</span></div><div class="day-cell weekend" data-date="2026-09-13" style="width:34px"><span class="dow">D</span><span class="dnum">13</span></div><div class="day-cell" data-date="2026-09-14" style="width:34px"><span class="dow">L</span><span class="dnum">14</span></div><div class="day-cell" data-date="2026-09-15" style="width:34px"><span class="dow">M</span><span class="dnum">15</span></div><div class="day-cell" data-date="2026-09-16" style="width:34px"><span class="dow">X</span><span class="dnum">16</span></div><div class="day-cell" data-date="2026-09-17" style="width:34px"><span class="dow">J</span><span class="dnum">17</span></div><div class="day-cell" data-date="2026-09-18" style="width:34px"><span class="dow">V</span><span class="dnum">18</span></div><div class="day-cell weekend" data-date="2026-09-19" style="width:34px"><span class="dow">S</span><span class="dnum">19</span></div><div class="day-cell weekend" data-date="2026-09-20" style="width:34px"><span class="dow">D</span><span class="dnum">20</span></div><div class="day-cell" data-date="2026-09-21" style="width:34px"><span class="dow">L</span><span class="dnum">21</span></div><div class="day-cell" data-date="2026-09-22" style="width:34px"><span class="dow">M</span><span class="dnum">22</span></div><div class="day-cell" data-date="2026-09-23" style="width:34px"><span class="dow">X</span><span class="dnum">23</span></div><div class="day-cell" data-date="2026-09-24" style="width:34px"><span class="dow">J</span><span class="dnum">24</span></div><div class="day-cell" data-date="2026-09-25" style="width:34px"><span class="dow">V</span><span class="dnum">25</span></div><div class="day-cell weekend" data-date="2026-09-26" style="width:34px"><span class="dow">S</span><span class="dnum">26</span></div><div class="day-cell weekend" data-date="2026-09-27" style="width:34px"><span class="dow">D</span><span class="dnum">27</span></div><div class="day-cell" data-date="2026-09-28" style="width:34px"><span class="dow">L</span><span class="dnum">28</span></div><div class="day-cell" data-date="2026-09-29" style="width:34px"><span class="dow">M</span><span class="dnum">29</span></div><div class="day-cell" data-date="2026-09-30" style="width:34px"><span class="dow">X</span><span class="dnum">30</span></div><div class="day-cell" data-date="2026-10-01" style="width:34px"><span class="dow">J</span><span class="dnum">1</span></div><div class="day-cell" data-date="2026-10-02" style="width:34px"><span class="dow">V</span><span class="dnum">2</span></div><div class="day-cell weekend" data-date="2026-10-03" style="width:34px"><span class="dow">S</span><span class="dnum">3</span></div><div class="day-cell weekend" data-date="2026-10-04" style="width:34px"><span class="dow">D</span><span class="dnum">4</span></div><div class="day-cell" data-date="2026-10-05" style="width:34px"><span class="dow">L</span><span class="dnum">5</span></div><div class="day-cell" data-date="2026-10-06" style="width:34px"><span class="dow">M</span><span class="dnum">6</span></div><div class="day-cell" data-date="2026-10-07" style="width:34px"><span class="dow">X</span><span class="dnum">7</span></div><div class="day-cell" data-date="2026-10-08" style="width:34px"><span class="dow">J</span><span class="dnum">8</span></div><div class="day-cell" data-date="2026-10-09" style="width:34px"><span class="dow">V</span><span class="dnum">9</span></div><div class="day-cell weekend" data-date="2026-10-10" style="width:34px"><span class="dow">S</span><span class="dnum">10</span></div><div class="day-cell weekend" data-date="2026-10-11" style="width:34px"><span class="dow">D</span><span class="dnum">11</span></div><div class="day-cell" data-date="2026-10-12" style="width:34px"><span class="dow">L</span><span class="dnum">12</span></div><div class="day-cell" data-date="2026-10-13" style="width:34px"><span class="dow">M</span><span class="dnum">13</span></div></div>
+        <div class="rows-area">
+          <div class="grid-bg"><div class="gridcol" data-date="2026-09-08" style="left:0px;width:34px"></div><div class="gridcol" data-date="2026-09-09" style="left:34px;width:34px"></div><div class="gridcol" data-date="2026-09-10" style="left:68px;width:34px"></div><div class="gridcol" data-date="2026-09-11" style="left:102px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-12" style="left:136px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-13" style="left:170px;width:34px"></div><div class="gridcol" data-date="2026-09-14" style="left:204px;width:34px"></div><div class="gridcol" data-date="2026-09-15" style="left:238px;width:34px"></div><div class="gridcol" data-date="2026-09-16" style="left:272px;width:34px"></div><div class="gridcol" data-date="2026-09-17" style="left:306px;width:34px"></div><div class="gridcol" data-date="2026-09-18" style="left:340px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-19" style="left:374px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-20" style="left:408px;width:34px"></div><div class="gridcol" data-date="2026-09-21" style="left:442px;width:34px"></div><div class="gridcol" data-date="2026-09-22" style="left:476px;width:34px"></div><div class="gridcol" data-date="2026-09-23" style="left:510px;width:34px"></div><div class="gridcol" data-date="2026-09-24" style="left:544px;width:34px"></div><div class="gridcol" data-date="2026-09-25" style="left:578px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-26" style="left:612px;width:34px"></div><div class="gridcol weekend" data-date="2026-09-27" style="left:646px;width:34px"></div><div class="gridcol" data-date="2026-09-28" style="left:680px;width:34px"></div><div class="gridcol" data-date="2026-09-29" style="left:714px;width:34px"></div><div class="gridcol" data-date="2026-09-30" style="left:748px;width:34px"></div><div class="gridcol" data-date="2026-10-01" style="left:782px;width:34px"></div><div class="gridcol" data-date="2026-10-02" style="left:816px;width:34px"></div><div class="gridcol weekend" data-date="2026-10-03" style="left:850px;width:34px"></div><div class="gridcol weekend" data-date="2026-10-04" style="left:884px;width:34px"></div><div class="gridcol" data-date="2026-10-05" style="left:918px;width:34px"></div><div class="gridcol" data-date="2026-10-06" style="left:952px;width:34px"></div><div class="gridcol" data-date="2026-10-07" style="left:986px;width:34px"></div><div class="gridcol" data-date="2026-10-08" style="left:1020px;width:34px"></div><div class="gridcol" data-date="2026-10-09" style="left:1054px;width:34px"></div><div class="gridcol weekend" data-date="2026-10-10" style="left:1088px;width:34px"></div><div class="gridcol weekend" data-date="2026-10-11" style="left:1122px;width:34px"></div><div class="gridcol" data-date="2026-10-12" style="left:1156px;width:34px"></div><div class="gridcol" data-date="2026-10-13" style="left:1190px;width:34px"></div></div>
+          <div class="row-wrap" data-row="0" data-parent="-1"><div class="bar bar-phase" data-row="0" style="left:204px;width:574px" title="1.0 Gestión de Proyecto, Gobierno y Control: 14/09/2026 → 30/09/2026"></div></div><div class="row-wrap" data-row="1" data-parent="0"><div class="bar bar-task bar-done" data-row="1" style="left:204px;width:30px" title="Handover Interno y Kick-off con Cliente: 14/09/2026 → 14/09/2026 — Marcado "Completado" pese a ser fecha futura respecto a hoy"></div></div><div class="row-wrap" data-row="2" data-parent="0"><div class="bar bar-task" data-row="2" style="left:204px;width:64px" title="Análisis de situación actual: 14/09/2026 → 15/09/2026"></div></div><div class="row-wrap" data-row="3" data-parent="0"><div class="bar bar-task" data-row="3" style="left:204px;width:30px" title="Sesión de descubrimiento de Proceso EC (0.5): 14/09/2026 → 14/09/2026"></div></div><div class="row-wrap" data-row="4" data-parent="0"><div class="bar bar-task" data-row="4" style="left:238px;width:30px" title="Especif. Funcional / Diseño / Reunión Key User: 15/09/2026 → 15/09/2026"></div></div><div class="row-wrap" data-row="5" data-parent="0"><div class="bar milestone-mark" data-row="5" style="left:238px" title="HITO 1: Firma Especificación Funcional: 15/09/2026"></div></div><div class="row-wrap" data-row="6" data-parent="0"><div class="bar bar-task" data-row="6" style="left:204px;width:574px" title="Gestión de Riesgos y Gobernanza (NTT/Seidor): 14/09/2026 → 30/09/2026"></div></div><div class="row-wrap" data-row="7" data-parent="0"><div class="bar bar-task" data-row="7" style="left:238px;width:540px" title="Control del Log de Cambios RBP (Smartsheet): 15/09/2026 → 30/09/2026"></div></div><div class="row-wrap" data-row="8" data-parent="-1"><div class="bar bar-phase" data-row="8" style="left:238px;width:268px" title="2.0 Configuración Employee Central: 15/09/2026 → 22/09/2026"></div></div><div class="row-wrap" data-row="9" data-parent="8"><div class="bar bar-critical" data-row="9" style="left:238px;width:64px" title="Config. Entidad Legal Alicapital (FO/MDF) y Asoc.: 15/09/2026 → 16/09/2026 — Configura la entidad legal en EC 2 semanas antes de que la sociedad exista en S/4 productivo (30/09)"></div></div><div class="row-wrap" data-row="10" data-parent="8"><div class="bar bar-task" data-row="10" style="left:306px;width:64px" title="Reglas Job Info y Workflows (Cese/Recontratación): 17/09/2026 → 18/09/2026"></div></div><div class="row-wrap" data-row="11" data-parent="8"><div class="bar bar-task" data-row="11" style="left:442px;width:30px" title="Roles y Permisos RBP (Target/Granting Groups): 21/09/2026 → 21/09/2026"></div></div><div class="row-wrap" data-row="12" data-parent="8"><div class="bar bar-task" data-row="12" style="left:476px;width:30px" title="Pruebas Unitarias EC y Documentación CCB: 22/09/2026 → 22/09/2026"></div></div><div class="row-wrap" data-row="13" data-parent="-1"><div class="bar bar-phase" data-row="13" style="left:238px;width:268px" title="3.0 Performance & Goals (PMGM) – Uplift: 15/09/2026 → 22/09/2026"></div></div><div class="row-wrap" data-row="14" data-parent="13"><div class="bar bar-task" data-row="14" style="left:238px;width:64px" title="Route Maps y Jerarquía Multicompañía: 15/09/2026 → 16/09/2026"></div></div><div class="row-wrap" data-row="15" data-parent="13"><div class="bar bar-task" data-row="15" style="left:306px;width:64px" title="Reglas de Transferencia y Filtros XML: 17/09/2026 → 18/09/2026"></div></div><div class="row-wrap" data-row="16" data-parent="13"><div class="bar bar-task" data-row="16" style="left:442px;width:30px" title="Grupos Dinámicos y Permisos RBP Evaluadores: 21/09/2026 → 21/09/2026"></div></div><div class="row-wrap" data-row="17" data-parent="13"><div class="bar bar-task" data-row="17" style="left:476px;width:30px" title="Pruebas Unitarias PMGM y Documentación CCB: 22/09/2026 → 22/09/2026"></div></div><div class="row-wrap" data-row="18" data-parent="-1"><div class="bar bar-phase" data-row="18" style="left:238px;width:268px" title="4.0 Recruiting Management (RCM) – Uplift: 15/09/2026 → 22/09/2026"></div></div><div class="row-wrap" data-row="19" data-parent="18"><div class="bar bar-task" data-row="19" style="left:238px;width:64px" title="Integración Posición-Requisición y Herencia Attr.: 15/09/2026 → 16/09/2026"></div></div><div class="row-wrap" data-row="20" data-parent="18"><div class="bar bar-task" data-row="20" style="left:306px;width:64px" title="Requisiciones en curso – Alineación: 17/09/2026 → 18/09/2026"></div></div><div class="row-wrap" data-row="21" data-parent="18"><div class="bar bar-task" data-row="21" style="left:442px;width:30px" title="Permisos de Campo y Gobernanza RCM/RBP: 21/09/2026 → 21/09/2026"></div></div><div class="row-wrap" data-row="22" data-parent="18"><div class="bar bar-task" data-row="22" style="left:476px;width:30px" title="Pruebas Unitarias RCM y Documentación CCB: 22/09/2026 → 22/09/2026"></div></div><div class="row-wrap" data-row="23" data-parent="-1"><div class="bar bar-phase" data-row="23" style="left:238px;width:234px" title="5.0 Integrations (BIB) – Uplift: 15/09/2026 → 21/09/2026"></div></div><div class="row-wrap" data-row="24" data-parent="23"><div class="bar bar-critical" data-row="24" style="left:238px;width:98px" title="Mapeo Integración S/4HANA (Nuevo Código/CECO): 15/09/2026 → 17/09/2026 — Mapea código de sociedad/CECO antes de que NTT lo despliegue en S/4 PRD (30/09)"></div></div><div class="row-wrap" data-row="25" data-parent="23"><div class="bar bar-task" data-row="25" style="left:340px;width:30px" title="Ajuste de Regla Área de Nómina = 99: 18/09/2026 → 18/09/2026"></div></div><div class="row-wrap" data-row="26" data-parent="23"><div class="bar bar-task" data-row="26" style="left:442px;width:30px" title="Pruebas Unitarias Integración BIB y Doc. CCB: 21/09/2026 → 21/09/2026"></div></div><div class="row-wrap" data-row="27" data-parent="-1"><div class="bar bar-phase" data-row="27" style="left:442px;width:370px" title="6.0 Pruebas Integradas, UAT, CCB y Cutover: 21/09/2026 → 01/10/2026"></div></div><div class="row-wrap" data-row="28" data-parent="27"><div class="bar milestone-mark" data-row="28" style="left:442px" title="HITO 2: Cierre Config. y Desarrollo en Preview: 21/09/2026"></div></div><div class="row-wrap" data-row="29" data-parent="27"><div class="bar bar-task" data-row="29" style="left:476px;width:98px" title="Pruebas Unitarias Integradas E2E (1 Empleado): 22/09/2026 → 24/09/2026"></div></div><div class="row-wrap" data-row="30" data-parent="27"><div class="bar bar-task" data-row="30" style="left:578px;width:132px" title="Ventana de Pruebas UAT con Cliente (Máx 1h/mód.): 25/09/2026 → 28/09/2026"></div></div><div class="row-wrap" data-row="31" data-parent="27"><div class="bar milestone-mark" data-row="31" style="left:680px" title="HITO 3: Firma de Aceptación UAT (Alicorp): 28/09/2026"></div></div><div class="row-wrap" data-row="32" data-parent="27"><div class="bar bar-task" data-row="32" style="left:714px;width:64px" title="Presentación y Aprobación CCB: 29/09/2026 → 30/09/2026"></div></div><div class="row-wrap" data-row="33" data-parent="27"><div class="bar bar-critical" data-row="33" style="left:782px;width:30px" title="Cutover y Transporte a Producción: 01/10/2026 → 01/10/2026 — Solo 1 día después del Despliegue a PRD de NTT (30/09)"></div></div><div class="row-wrap" data-row="34" data-parent="27"><div class="bar milestone-mark" data-row="34" style="left:782px" title="HITO 4: Go-Live / Salida a Producción Alicapital: 01/10/2026"></div></div>
+          <div class="vmark mark-ntt" style="left:748px"><span>Despliegue a PRD (NTT)</span></div><div class="vmark mark-ver" style="left:782px"><span>Go-Live HCM (Veritas Prime)</span></div>
+          <div class="today-marker"><span class="flag">HOY</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Sync horizontal scroll between the two timeline panels
+  const wraps = document.querySelectorAll('.scroll-wrap');
+  wraps.forEach(w => {
+    w.addEventListener('scroll', () => {
+      wraps.forEach(other => { if (other !== w) other.scrollLeft = w.scrollLeft; });
+    });
+  });
+
+  // --- Row hover highlight (synced between label column and timeline bar) ---
+  // Listeners go only on the two row *containers* (row-line, row-wrap): mouseenter/mouseleave
+  // ignore internal child-boundary crossings, so hovering the bar vs. the empty row background
+  // both count as "inside the row" without flicker. The class is then applied to every element
+  // sharing that data-row (label, row background, bar) so the bar's color updates too.
+  ['ntt', 'ver'].forEach(panelId => {
+    const panel = document.getElementById(panelId);
+    panel.querySelectorAll('.row-line, .row-wrap').forEach(el => {
+      el.addEventListener('mouseenter', () => {
+        const idx = el.dataset.row;
+        panel.querySelectorAll(`[data-row="${idx}"]`).forEach(m => m.classList.add('row-hover'));
+      });
+      el.addEventListener('mouseleave', () => {
+        const idx = el.dataset.row;
+        panel.querySelectorAll(`[data-row="${idx}"]`).forEach(m => m.classList.remove('row-hover'));
+      });
+    });
+  });
+
+  // --- Collapsible tasks ---
+  // Rows are normal block-flow elements (not absolutely positioned by index), so hiding a
+  // collapsed phase's descendants just lets the browser reflow the remaining rows — no manual
+  // position recalculation needed on either the label column or the timeline bars.
+  function setupCollapse(panelId) {
+    const panel = document.getElementById(panelId);
+    const rowLines = Array.from(panel.querySelectorAll('.labels-col .row-line'));
+    const rowWraps = Array.from(panel.querySelectorAll('.row-wrap'));
+    const parentOf = {};
+    rowLines.forEach(rl => { parentOf[rl.dataset.row] = rl.dataset.parent; });
+    const collapsed = new Set();
+
+    function isHidden(idx) {
+      let p = parentOf[idx];
+      while (p !== undefined && p !== '-1') {
+        if (collapsed.has(p)) return true;
+        p = parentOf[p];
+      }
+      return false;
+    }
+    function refresh() {
+      rowLines.forEach(rl => { rl.style.display = isHidden(rl.dataset.row) ? 'none' : ''; });
+      rowWraps.forEach(rw => { rw.style.display = isHidden(rw.dataset.row) ? 'none' : ''; });
+    }
+    function toggle(idx, rowLine) {
+      if (collapsed.has(idx)) {
+        collapsed.delete(idx);
+        rowLine.classList.remove('collapsed');
+      } else {
+        collapsed.add(idx);
+        rowLine.classList.add('collapsed');
+      }
+      refresh();
+    }
+    panel.querySelectorAll('.caret[data-toggle]').forEach(caret => {
+      caret.addEventListener('click', () => {
+        toggle(caret.getAttribute('data-toggle'), caret.closest('.row-line'));
+      });
+    });
+    const collapseAllBtn = panel.querySelector('.collapse-all');
+    if (collapseAllBtn) {
+      collapseAllBtn.addEventListener('click', () => {
+        rowLines.forEach(rl => {
+          if (rl.querySelector('.caret[data-toggle]')) {
+            collapsed.add(rl.dataset.row);
+            rl.classList.add('collapsed');
+          }
+        });
+        refresh();
+      });
+    }
+    const expandAllBtn = panel.querySelector('.expand-all');
+    if (expandAllBtn) {
+      expandAllBtn.addEventListener('click', () => {
+        collapsed.clear();
+        rowLines.forEach(rl => rl.classList.remove('collapsed'));
+        refresh();
+      });
+    }
+  }
+  setupCollapse('ntt');
+  setupCollapse('ver');
+
+  // --- Draggable "today" reference line (America/Lima timezone by default) ---
+  const DAY_W = 34;
+  const TOTAL_DAYS = 36;
+  const TIMELINE_START_ISO = '2026-09-08';
+
+  function limaTodayISO() {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+  }
+  function isoToUTC(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+  }
+  function dayIndexFromISO(iso) {
+    return Math.round((isoToUTC(iso) - isoToUTC(TIMELINE_START_ISO)) / 86400000);
+  }
+  function isoFromDayIndex(idx) {
+    const dt = new Date(isoToUTC(TIMELINE_START_ISO));
+    dt.setUTCDate(dt.getUTCDate() + idx);
+    return dt.toISOString().slice(0, 10);
+  }
+  function formatEs(iso) {
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  const todayISO = limaTodayISO();
+  const todayIdx = dayIndexFromISO(todayISO);
+
+  // Static tint on the real "today" column (independent of the draggable line)
+  if (todayIdx >= 0 && todayIdx < TOTAL_DAYS) {
+    document.querySelectorAll(`.day-cell[data-date="${todayISO}"]`).forEach(el => el.classList.add('is-today'));
+    document.querySelectorAll(`.gridcol[data-date="${todayISO}"]`).forEach(el => el.classList.add('today-col'));
+  }
+  const todayTextEl = document.getElementById('todayText');
+  if (todayTextEl) {
+    todayTextEl.textContent = `hoy, ${formatEs(todayISO)} (América/Lima)`;
+  }
+
+  const markers = Array.from(document.querySelectorAll('.today-marker'));
+  let currentIdx = Math.max(0, Math.min(todayIdx, TOTAL_DAYS - 1));
+
+  function renderMarkers(idx) {
+    const left = idx * DAY_W + DAY_W / 2;
+    const iso = isoFromDayIndex(idx);
+    const label = (iso === todayISO) ? 'HOY' : formatEs(iso).slice(0, 5);
+    markers.forEach(m => {
+      m.style.left = left + 'px';
+      m.querySelector('.flag').textContent = label;
+      m.classList.add('ready');
+    });
+  }
+  renderMarkers(currentIdx);
+
+  let dragging = false;
+  markers.forEach(m => {
+    m.addEventListener('pointerdown', e => {
+      dragging = true;
+      m.setPointerCapture(e.pointerId);
+      document.body.classList.add('marker-dragging');
+    });
+  });
+  document.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const col = (hit && hit.closest('.timeline-col')) || markers[0].closest('.timeline-col');
+    const rect = col.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    let idx = Math.round((x - DAY_W / 2) / DAY_W);
+    idx = Math.max(0, Math.min(idx, TOTAL_DAYS - 1));
+    if (idx !== currentIdx) {
+      currentIdx = idx;
+      renderMarkers(currentIdx);
+    }
+  });
+  document.addEventListener('pointerup', () => {
+    dragging = false;
+    document.body.classList.remove('marker-dragging');
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Implementación: BTM 526 · Alicapital</title>
+<style>
+  :root {
+    --bg: #101a23;
+    --panel: #172432;
+    --panel-2: #131b30;
+    --ink: #f3f5f9;
+    --muted: #8b93a8;
+    --grid: #1c2438;
+    --weekend: #141c30;
+    --today: #ef4444;
+    --blue: #8fa8f0;
+    --gold: #c9a35a;
+    --coral: #e2776a;
+    --ntt: var(--blue);
+    --veritas: var(--gold);
+    --neutral: #5b6478;
+    --golive: var(--coral);
+    --border: #35486e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .page { width: 100%; max-width: 1104.0px; }
+  .page-header {
+    padding: 18px 22px; margin-bottom: 18px; border-radius: 12px;
+    background: linear-gradient(135deg, #0d1220, #161f38);
+    border: 1px solid var(--border);
+  }
+  .page-header h1 { margin: 0; color: #fff; font-size: 20px; font-weight: 700; letter-spacing: .2px; }
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px;
+  }
+  .kpi-card {
+    position: relative;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; border-top: 3px solid var(--accent, var(--neutral));
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 4px 10px rgba(0,0,0,.18);
+  }
+  .kpi-icon {
+    position: absolute; top: 14px; right: 14px; width: 20px; height: 20px;
+    color: var(--accent, var(--muted)); opacity: .85;
+  }
+  .kpi-icon svg { width: 100%; height: 100%; }
+  .kpi-label { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; padding-right: 26px; }
+  .kpi-value { font-size: 24px; font-weight: 800; margin-top: 4px; color: var(--ink); }
+  .kpi-value.kpi-muted { color: var(--muted); font-size: 20px; }
+  .kpi-sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .kpi-progress { height: 6px; border-radius: 999px; background: var(--grid); margin-top: 10px; overflow: hidden; }
+  .kpi-progress-fill { height: 100%; background: var(--accent, var(--neutral)); border-radius: 999px; }
+  .tabs {
+    display: flex; gap: 4px; padding: 0 4px;
+  }
+  .tab-btn {
+    position: relative; top: 1px; z-index: 1;
+    display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--muted);
+    background: transparent; border: 1px solid transparent; border-bottom: none;
+    border-radius: 10px 10px 0 0; margin-bottom: -1px;
+    padding: 11px 17px 12px; cursor: pointer;
+  }
+  .tab-btn .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); flex: 0 0 auto; }
+  .tab-btn:hover { color: var(--ink); background: rgba(255,255,255,0.04); }
+  .tab-btn.active {
+    color: var(--blue); background: var(--panel);
+    border-color: var(--border); border-bottom-color: var(--panel);
+  }
+  .tab-btn.active .dot { background: var(--gold); }
+  .tabs-body {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 0 0 12px 12px;
+    padding: 22px; margin-bottom: 22px;
+  }
+  .tab-panel[hidden] { display: none; }
+  .table-wrap {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    overflow: auto; padding: 4px;
+  }
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data-table th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: .5px; color: var(--muted); padding: 12px 16px; border-bottom: 2px solid var(--border);
+  }
+  table.data-table td { padding: 14px 16px; border-bottom: 1px solid var(--grid); vertical-align: top; color: var(--ink); }
+  table.data-table tr:last-child td { border-bottom: none; }
+  table.data-table td.cost-zero { color: var(--muted); }
+  table.data-table td.tbd { color: var(--muted); font-style: italic; }
+  table.data-table td.obs { color: var(--muted); font-size: 12px; }
+  .obs-link { color: var(--blue); text-decoration: none; font-weight: 600; }
+  .obs-link:hover { text-decoration: underline; }
+  .detail-block { margin-top: 24px; scroll-margin-top: 24px; }
+  .pill {
+    display: inline-flex; align-items: center; font-size: 11px;
+    font-weight: 700; letter-spacing: .3px; text-transform: uppercase; color: var(--gold);
+    border: 1px solid var(--gold); border-radius: 999px; padding: 3px 11px; background: rgba(201,163,90,0.08);
+  }
+  .pill.pill-ext { color: var(--muted); border-color: var(--muted); background: rgba(139,147,168,0.08); }
+  .pill.pill-interno { color: #93a4c4; border-color: #3a4568; background: rgba(147,164,196,0.06); }
+  table.data-table td.role-name { color: var(--blue); font-weight: 600; }
+  table.data-table td.role-name.role-lead { color: var(--ink); font-weight: 700; }
+  .section-title { font-size: 20px; font-weight: 700; color: var(--ink); margin: 0 0 4px; }
+  .section-sub { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+  .link-domain { color: var(--coral); font-size: 12px; margin-top: 4px; }
+  .ppto-summary { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-top: 16px; }
+  .dist-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px;
+  }
+  .dist-card .dist-title { font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+    color: var(--muted); margin-bottom: 14px;
+  }
+  .dist-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .dist-row:last-child { margin-bottom: 0; }
+  .dist-label { flex: 0 0 130px; font-size: 12px; color: var(--ink); line-height: 1.3; }
+  .dist-track {
+    flex: 1; height: 8px; border-radius: 999px; background: var(--grid); overflow: hidden; position: relative;
+  }
+  .dist-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--blue), var(--gold)); }
+  .dist-value { flex: 0 0 auto; font-size: 12.5px; color: var(--ink); min-width: 76px; text-align: right; }
+  .totals-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .totals-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; font-size: 13px; color: var(--ink);
+    border-bottom: 1px solid var(--grid);
+  }
+  .totals-row:last-child { border-bottom: none; }
+  .totals-row.contingencia { background: rgba(201,163,90,0.10); color: var(--gold); }
+  .totals-row.total { background: rgba(143,168,240,0.16); font-size: 16px; font-weight: 700; color: var(--blue); }
+  .ppto-footnote { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 14px; }
+  .risk-layout { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .risk-matrix-col { display: flex; flex-direction: column; gap: 10px; }
+  .risk-axis-title-x {
+    margin-left: 118px; font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .risk-matrix-row { display: flex; gap: 14px; align-items: center; }
+  .risk-axis-title-y {
+    writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 700;
+    color: var(--muted); text-transform: uppercase; letter-spacing: .5px; align-self: stretch;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .risk-matrix {
+    display: grid; grid-template-columns: 108px repeat(4, 80px); grid-auto-rows: 52px; gap: 4px;
+  }
+  .risk-cell {
+    position: relative;
+    display: flex; align-items: center; justify-content: center; border-radius: 8px;
+    font-size: 13.5px; font-weight: 700; color: var(--ink);
+  }
+  .risk-cell-marked {
+    box-shadow: 0 0 0 2px var(--ink) inset;
+  }
+  .risk-marker {
+    position: absolute; top: 3px; left: 4px; font-size: 9px; font-weight: 800;
+    background: var(--ink); color: var(--panel); padding: 1px 4px; border-radius: 4px; line-height: 1.2;
+  }
+  .risk-corner { background: transparent; }
+  .risk-axis-x {
+    background: transparent; color: var(--muted); font-size: 10.5px; font-weight: 600;
+    text-transform: uppercase; align-items: flex-end; padding-bottom: 6px; text-align: center;
+  }
+  .risk-axis-y {
+    background: transparent; color: var(--muted); font-size: 10.5px; font-weight: 600;
+    text-transform: uppercase; justify-content: flex-end; padding-right: 10px; text-align: right;
+  }
+  .risk-low { background: rgba(79,191,168,0.22); }
+  .risk-mod { background: rgba(201,163,90,0.28); color: var(--gold); }
+  .risk-high { background: rgba(226,119,106,0.38); }
+  .risk-crit { background: rgba(226,119,106,0.78); color: #fff; }
+  .risk-legend { display: flex; flex-direction: column; gap: 10px; min-width: 220px; }
+  .risk-legend .item { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink); }
+  .risk-legend .swatch-lg { width: 20px; height: 20px; border-radius: 6px; flex: 0 0 auto; }
+  .risk-empty-note {
+    margin-top: 4px; font-size: 12.5px; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px;
+    max-width: 320px;
+  }
+  .risk-register { margin-top: 28px; }
+  .risk-register .dist-title { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 10px; }
+  .risk-id { font-weight: 800; color: var(--ink); }
+  .risk-title { font-weight: 600; color: var(--ink); }
+  .risk-desc { margin-top: 4px; color: var(--muted); font-size: 12px; max-width: 480px; }
+  .risk-sev-pill {
+    display: inline-flex; align-items: center; font-size: 11px; font-weight: 700;
+    letter-spacing: .3px; text-transform: uppercase; border-radius: 999px; padding: 3px 11px;
+  }
+  .risk-sev-pill.sev-low { color: #4fbfa8; border: 1px solid #4fbfa8; background: rgba(79,191,168,0.12); }
+  .risk-sev-pill.sev-mod { color: var(--gold); border: 1px solid var(--gold); background: rgba(201,163,90,0.14); }
+  .risk-sev-pill.sev-high { color: var(--coral); border: 1px solid var(--coral); background: rgba(226,119,106,0.16); }
+  .risk-sev-pill.sev-crit { color: #fff; border: 1px solid var(--coral); background: rgba(226,119,106,0.65); }
+  .scope-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 22px;
+  }
+  .scope-card {
+    background: var(--panel); border: 1px solid var(--border); border-top: 3px solid var(--blue);
+    border-radius: 12px; padding: 16px 18px;
+  }
+  .scope-card h3 { margin: 0 0 12px; font-size: 14px; font-weight: 700; color: var(--blue); line-height: 1.3; }
+  .scope-card ul { margin: 0; padding-left: 18px; }
+  .scope-card li { font-size: 12.5px; color: var(--ink); margin-bottom: 10px; line-height: 1.45; }
+  .scope-card li:last-child { margin-bottom: 0; }
+  .scope-card li::marker { color: var(--blue); }
+  .scope-card.out-scope { border-top-color: var(--muted); }
+  .scope-card.out-scope h3 { color: var(--muted); }
+  .scope-card.out-scope li { color: var(--muted); }
+  .scope-card.out-scope li::marker { color: var(--muted); }
+  @media (max-width: 900px) {
+    .scope-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 16px; margin-bottom: 22px;
+    font-size: 12.5px; color: var(--muted);
+  }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .panel-head { padding: 14px 18px 10px; border-bottom: 1px solid var(--border); }
+  .panel-head-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .panel-head h2 { margin: 0; font-size: 15px; }
+  .panel-head .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .panel-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+  .btn-mini {
+    font: inherit; font-size: 11.5px; color: var(--muted); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; cursor: pointer;
+  }
+  .btn-mini:hover { background: var(--grid); color: var(--ink); }
+  .scroll-wrap { overflow-x: auto; }
+  .chart { position: relative; display: flex; }
+  .labels-col {
+    flex: 0 0 380px; min-width: 0; max-width: 380px; position: sticky; left: 0; background: var(--panel);
+    z-index: 3; border-right: 1px solid var(--border);
+  }
+  .labels-col .row-line { display: flex; align-items: center; height: 30px; border-bottom: 1px solid var(--grid); padding: 0 10px; }
+  .labels-col .header-spacer { height: 40px; border-bottom: 1px solid var(--border); }
+  .lbl { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12.5px; width: 100%; }
+  .lbl .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .phase > .lbl .txt { font-weight: 700; }
+  .row-line.phase .lbl .txt {
+    white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3;
+  }
+  .pct-badge {
+    flex: 0 0 auto; margin-left: auto; font-size: 10.5px; font-weight: 700;
+    padding: 1px 6px; border-radius: 999px; background: var(--grid); color: var(--muted);
+  }
+  .pct-badge.pct-done { background: rgba(52,211,153,0.15); color: #34d399; }
+  .pct-badge.pct-mid { background: rgba(201,163,90,0.18); color: var(--gold); }
+  .caret {
+    flex: 0 0 14px; width: 14px; text-align: center; font-size: 10px; color: var(--muted);
+    cursor: pointer; user-select: none; transition: transform .15s; border-radius: 3px;
+  }
+  .caret:hover { color: var(--ink); background: var(--grid); }
+  .caret.caret-empty { visibility: hidden; cursor: default; }
+  .row-line.collapsed .caret { transform: rotate(-90deg); }
+  .timeline-col { position: relative; }
+  .week-row { display: flex; height: 40px; border-bottom: 1px solid var(--border); box-sizing: border-box; }
+  .week-cell {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; border-right: 1px solid var(--border); box-sizing: border-box;
+  }
+  .week-cell .week-num { font-size: 9.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+  .week-cell .week-range { font-size: 11.5px; font-weight: 600; color: var(--ink); }
+  .week-cell.current-week { background: rgba(239,68,68,0.12); }
+  .week-cell.current-week .week-num { color: var(--today); }
+  .rows-area { position: relative; }
+  .grid-bg { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+  .weekcol { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--grid); }
+  .weekcol.alt { background: var(--weekend); }
+  .weekcol.current-week { background: rgba(239,68,68,0.06); }
+  .row-line, .row-wrap { position: relative; height: 30px; border-bottom: 1px solid var(--grid); cursor: default; }
+  .row-line.phase, .row-wrap.phase { height: 58px; }
+  .labels-col .row-line.phase { height: 58px; padding: 6px 10px; }
+  .bar {
+    position: absolute; top: 6px; height: 18px; border-radius: 5px; cursor: default;
+    overflow: hidden;
+  }
+  .row-wrap.phase .bar { top: 18px; height: 22px; border-radius: 6px; }
+  .bar-fill {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    background: rgba(0,0,0,0.28); border-right: 1px solid rgba(0,0,0,0.35);
+  }
+  .row-line.row-hover { background: rgba(236,72,153,0.10); }
+  .row-wrap.row-hover { background: rgba(236,72,153,0.12); }
+  .bar.row-hover { background: #ec4899 !important; box-shadow: 0 0 0 3px rgba(236,72,153,0.35) !important; }
+  .bar-phase-ntt { background: var(--ntt); opacity: .92; }
+  .bar-phase-veritas { background: var(--veritas); opacity: .92; }
+  .bar-phase-neutral { background: var(--neutral); opacity: .92; }
+  .bar-phase-golive { background: var(--golive); opacity: .92; }
+  .bar-task-ntt { background: var(--ntt); opacity: .55; }
+  .bar-task-veritas { background: var(--veritas); opacity: .55; }
+  .bar-task-neutral { background: var(--neutral); opacity: .5; }
+  .bar-task-golive { background: var(--golive); box-shadow: 0 0 0 2px rgba(217,119,6,0.3); }
+  .golive-flag {
+    position: absolute; top: 20px; font-size: 18px; line-height: 1; pointer-events: none;
+  }
+  .today-marker {
+    position: absolute; top: 0; bottom: 0; width: 2px; background: var(--today);
+    transform: translateX(-50%); z-index: 8; cursor: ew-resize; opacity: 0;
+    transition: opacity .12s, background-color .12s;
+  }
+  .today-marker.ready { opacity: 1; }
+  .today-marker::after { content: ''; position: absolute; top: 0; bottom: 0; left: -6px; width: 14px; }
+  .today-marker .flag {
+    position: absolute; top: -2px; left: 4px; transform: translateY(-100%);
+    background: var(--today); color: #fff; font-size: 10.5px; font-weight: 700;
+    padding: 2px 7px; border-radius: 5px 5px 5px 2px; white-space: nowrap; pointer-events: none;
+  }
+  body.marker-dragging { cursor: ew-resize; user-select: none; }
+  body.marker-dragging .today-marker { background: #b91c1c; }
+  body.marker-dragging .today-marker .flag { background: #b91c1c; }
+  .task-tooltip {
+    position: fixed; z-index: 50; pointer-events: none; display: none;
+    background: var(--panel-2); border: 1px solid var(--border); color: #f9fafb;
+    padding: 10px 12px; border-radius: 8px;
+    font-size: 12px; line-height: 1.5; max-width: 300px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  }
+  .task-tooltip .tt-title { font-weight: 700; font-size: 12.5px; margin-bottom: 4px; }
+  .task-tooltip .tt-row { display: flex; gap: 6px; color: #d1d5db; }
+  .task-tooltip .tt-row b { color: #f9fafb; font-weight: 600; }
+  .page-footer {
+    margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px; text-align: center; letter-spacing: .2px;
+  }
+  @media (max-width: 720px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .ppto-summary { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="taskTooltip" class="task-tooltip"></div>
+
+<div class="page">
+
+<header class="page-header">
+  <h1>Implementación: BTM 526 · Alicapital</h1>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" type="button" data-tab="cronograma"><span class="dot"></span>Cronograma</button>
+  <button class="tab-btn" type="button" data-tab="ppto"><span class="dot"></span>Presupuesto</button>
+  <button class="tab-btn" type="button" data-tab="capacidad"><span class="dot"></span>Capacidades</button>
+  <button class="tab-btn" type="button" data-tab="tiadm"><span class="dot"></span>Servicios TI</button>
+  <button class="tab-btn" type="button" data-tab="riesgos"><span class="dot"></span>Riesgos</button>
+</div>
+<div class="tabs-body">
+
+<div class="tab-panel" id="tab-cronograma">
+
+<div class="kpi-grid">
+  <div class="kpi-card" style="--accent:var(--ntt)">
+    <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+    <div class="kpi-label">Avance de Cronograma</div>
+    <div class="kpi-value">80%</div>
+    <div class="kpi-progress">
+      <div class="kpi-progress-fill" style="width:80%"></div>
+    </div>
+  </div>
+  <div class="kpi-card" style="--accent:var(--gold)">
+    <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></span>
+    <div class="kpi-label">Presupuesto</div>
+    <div class="kpi-value">USD 18,122.35</div>
+    <div class="kpi-sub">Subtotal 17,259.38 + contingencia 5%</div>
+  </div>
+  <div class="kpi-card" style="--accent:var(--golive)">
+    <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></span>
+    <div class="kpi-label">Go-Live</div>
+    <div class="kpi-value">01/10/2026</div>
+    <div class="kpi-sub">Cutover conjunto FI + HCM</div>
+  </div>
+  <div class="kpi-card" style="--accent:var(--coral)">
+    <span class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+    <div class="kpi-label">Riesgos Críticos</div>
+    <div class="kpi-value">0</div>
+    <div class="kpi-sub">0 críticos de 2 riesgos registrados</div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="item"><span class="swatch" style="background:var(--ntt)"></span>NTT (FI)</div>
+  <div class="item"><span class="swatch" style="background:var(--veritas)"></span>Veritas Prime (HCM)</div>
+  <div class="item"><span class="swatch" style="background:var(--neutral)"></span>Alicorp</div>
+  <div class="item"><span class="swatch" style="background:var(--golive)"></span>Go-Live / Cutover</div>
+</div>
+
+<div class="panel" id="final">
+  <div class="panel-head">
+    <div class="panel-head-top">
+      <span id="todayText" style="display:none"></span>
+      <div class="panel-actions">
+        <button class="btn-mini expand-all" type="button">Expandir todo</button>
+        <button class="btn-mini collapse-all" type="button">Colapsar todo</button>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-wrap">
+    <div class="chart" style="width:1100.0px">
+      <div class="labels-col">
+        <div class="header-spacer"></div>
+        <div class="row-line lvl0 phase" data-row="0" data-parent="-1"><span class="lbl" style="padding-left:0px"><span class="caret" data-toggle="0">▾</span><span class="txt">PROYECTO ALICORP - NUEVA SOCIEDAD ALICAPITAL</span><span class="pct-badge pct-mid">80%</span></span></div><div class="row-line lvl1 phase" data-row="1" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret" data-toggle="1">▾</span><span class="txt">1.0 Gestión Finanzas S4 HANA</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="2" data-parent="1"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">1.1 Construcción de Sociedad y CECO</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="3" data-parent="1"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">1.2 Pruebas de Consultoria</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl1 phase" data-row="4" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret" data-toggle="4">▾</span><span class="txt">2.0 Configuración Employee Central - SuccessFactors</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="5" data-parent="4"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">2.1 Config. Entidad Legal Alicapital (FO/MDF) y Asociaciones</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="6" data-parent="4"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">2.2 Reglas Job Info y Workflows (Cese/Recontratación)</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="7" data-parent="4"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">2.3 Roles y Permisos RBP (Target/Granting Groups)</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="8" data-parent="4"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">2.4 Pruebas Unitarias EC y Documentación CCB</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl1 phase" data-row="9" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret" data-toggle="9">▾</span><span class="txt">3.0 Performance & Goals (PMGM) - SuccessFactors</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="10" data-parent="9"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">3.1 Route Maps y Jerarquía Multicompañía</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="11" data-parent="9"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">3.2 Reglas de Transferencia y Filtros XML</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="12" data-parent="9"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">3.3 Grupos Dinámicos y Permisos RBP Evaluadores</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="13" data-parent="9"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">3.4 Pruebas Unitarias PMGM y Documentación CCB</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl1 phase" data-row="14" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret" data-toggle="14">▾</span><span class="txt">4.0 Recruiting Management (RCM) - SuccessFactors</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="15" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">4.1 Integración Posición-Requisición y Herencia Atributos</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="16" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">4.2 Requisiciones en curso - Alineación</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="17" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">4.3 Permisos de Campo y Gobernanza RCM/RBP</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="18" data-parent="14"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">4.4 Pruebas Unitarias RCM y Documentación CCB</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl1 phase" data-row="19" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret" data-toggle="19">▾</span><span class="txt">5.0 Integraciones (BIB) - SuccessFactors/ S4 HANA</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="20" data-parent="19"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">5.1 Mapeo Integración S/4HANA (Nuevo Código/CECO)</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="21" data-parent="19"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">5.2 Ajuste de Regla Área de Nómina = 99</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="22" data-parent="19"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">5.3 Pruebas Unitarias Integración BIB y Doc. CCB</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl1 phase" data-row="23" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret" data-toggle="23">▾</span><span class="txt">6.0 Pruebas Integradas, UAT, CCB y Cutover</span><span class="pct-badge pct-mid">62.5%</span></span></div><div class="row-line lvl2 task" data-row="24" data-parent="23"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">6.1 Pruebas Unitarias Integradas E2E (Simulación 1 Empleado)</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="25" data-parent="23"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">6.2 Ventana de Pruebas UAT con Cliente (Máx 1h/mód.)</span><span class="pct-badge pct-done">100%</span></span></div><div class="row-line lvl2 task" data-row="26" data-parent="23"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">6.3 Presentación y Aprobación Comité de Cambios (CCB)</span><span class="pct-badge pct-zero">0%</span></span></div><div class="row-line lvl2 task" data-row="27" data-parent="23"><span class="lbl" style="padding-left:36px"><span class="caret caret-empty"></span><span class="txt">6.4 Cutover y Transporte a Producción</span><span class="pct-badge pct-mid">50%</span></span></div><div class="row-line lvl1 phase" data-row="28" data-parent="0"><span class="lbl" style="padding-left:18px"><span class="caret caret-empty"></span><span class="txt">GO-LIVE 🏁</span><span class="pct-badge pct-zero">0%</span></span></div>
+      </div>
+      <div class="timeline-col" style="width:720.0px">
+        <div class="week-row"><div class="week-cell" data-week="2026-09-07" style="width:180px"><span class="week-num">Sem 1</span><span class="week-range">07 sep – 13 sep</span></div><div class="week-cell" data-week="2026-09-14" style="width:180px"><span class="week-num">Sem 2</span><span class="week-range">14 sep – 20 sep</span></div><div class="week-cell" data-week="2026-09-21" style="width:180px"><span class="week-num">Sem 3</span><span class="week-range">21 sep – 27 sep</span></div><div class="week-cell" data-week="2026-09-28" style="width:180px"><span class="week-num">Sem 4</span><span class="week-range">28 sep – 04 oct</span></div></div>
+        <div class="rows-area">
+          <div class="grid-bg"><div class="weekcol" data-week="2026-09-07" style="left:0.0px;width:180px"></div><div class="weekcol alt" data-week="2026-09-14" style="left:180.0px;width:180px"></div><div class="weekcol" data-week="2026-09-21" style="left:360.0px;width:180px"></div><div class="weekcol alt" data-week="2026-09-28" style="left:540.0px;width:180px"></div></div>
+          <div class="row-wrap phase" data-row="0" data-parent="-1"><div class="bar bar-phase-neutral" data-row="0" style="left:25.714285714285715px;width:613.1428571428571px"><div class="bar-fill" style="width:80%"></div></div></div><div class="row-wrap phase" data-row="1" data-parent="0"><div class="bar bar-phase-ntt" data-row="1" style="left:25.714285714285715px;width:73.14285714285714px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="2" data-parent="1"><div class="bar bar-task-ntt" data-row="2" style="left:25.714285714285715px;width:47.42857142857143px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="3" data-parent="1"><div class="bar bar-task-ntt" data-row="3" style="left:77.14285714285714px;width:21.714285714285715px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap phase" data-row="4" data-parent="0"><div class="bar bar-phase-veritas" data-row="4" style="left:205.71428571428572px;width:201.71428571428572px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="5" data-parent="4"><div class="bar bar-task-veritas" data-row="5" style="left:205.71428571428572px;width:47.42857142857143px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="6" data-parent="4"><div class="bar bar-task-veritas" data-row="6" style="left:257.14285714285717px;width:47.42857142857143px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="7" data-parent="4"><div class="bar bar-task-veritas" data-row="7" style="left:360.0px;width:21.714285714285715px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="8" data-parent="4"><div class="bar bar-task-veritas" data-row="8" style="left:385.7142857142857px;width:21.714285714285715px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap phase" data-row="9" data-parent="0"><div class="bar bar-phase-veritas" data-row="9" style="left:205.71428571428572px;width:201.71428571428572px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="10" data-parent="9"><div class="bar bar-task-veritas" data-row="10" style="left:205.71428571428572px;width:47.42857142857143px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="11" data-parent="9"><div class="bar bar-task-veritas" data-row="11" style="left:257.14285714285717px;width:47.42857142857143px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="12" data-parent="9"><div class="bar bar-task-veritas" data-row="12" style="left:360.0px;width:21.714285714285715px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="13" data-parent="9"><div class="bar bar-task-veritas" data-row="13" style="left:385.7142857142857px;width:21.714285714285715px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap phase" data-row="14" data-parent="0"><div class="bar bar-phase-veritas" data-row="14" style="left:205.71428571428572px;width:201.71428571428572px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="15" data-parent="14"><div class="bar bar-task-veritas" data-row="15" style="left:205.71428571428572px;width:47.42857142857143px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="16" data-parent="14"><div class="bar bar-task-veritas" data-row="16" style="left:257.14285714285717px;width:47.42857142857143px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="17" data-parent="14"><div class="bar bar-task-veritas" data-row="17" style="left:360.0px;width:21.714285714285715px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="18" data-parent="14"><div class="bar bar-task-veritas" data-row="18" style="left:385.7142857142857px;width:21.714285714285715px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap phase" data-row="19" data-parent="0"><div class="bar bar-phase-veritas" data-row="19" style="left:205.71428571428572px;width:176.0px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="20" data-parent="19"><div class="bar bar-task-veritas" data-row="20" style="left:205.71428571428572px;width:73.14285714285714px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="21" data-parent="19"><div class="bar bar-task-veritas" data-row="21" style="left:282.8571428571429px;width:21.714285714285715px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="22" data-parent="19"><div class="bar bar-task-veritas" data-row="22" style="left:360.0px;width:21.714285714285715px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap phase" data-row="23" data-parent="0"><div class="bar bar-phase-neutral" data-row="23" style="left:360.0px;width:278.8571428571429px"><div class="bar-fill" style="width:62.5%"></div></div></div><div class="row-wrap task" data-row="24" data-parent="23"><div class="bar bar-task-neutral" data-row="24" style="left:385.7142857142857px;width:73.14285714285714px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="25" data-parent="23"><div class="bar bar-task-neutral" data-row="25" style="left:462.8571428571429px;width:98.85714285714286px"><div class="bar-fill" style="width:100%"></div></div></div><div class="row-wrap task" data-row="26" data-parent="23"><div class="bar bar-task-neutral" data-row="26" style="left:565.7142857142858px;width:47.42857142857143px"></div></div><div class="row-wrap task" data-row="27" data-parent="23"><div class="bar bar-task-neutral" data-row="27" style="left:617.1428571428571px;width:21.714285714285715px"><div class="bar-fill" style="width:50%"></div></div></div><div class="row-wrap phase" data-row="28" data-parent="0"><div class="bar bar-phase-golive" data-row="28" style="left:617.1428571428571px;width:21.714285714285715px"></div><span class="golive-flag" style="left:642.8571428571428px">🏁</span></div>
+          <div class="today-marker"><span class="flag">HOY</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section-title" style="font-size:16px;margin-top:24px">Próximos Pasos</div>
+<div class="section-sub">Actividades inmediatas previas al Go-Live.</div>
+
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Tarea</th>
+        <th>Responsable</th>
+        <th>Fecha</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="risk-id">1</td><td>Revisión del Plan de Cutover</td><td>Alicorp</td><td>28/09/2026</td></tr>
+      <tr><td class="risk-id">2</td><td>Presentación al comité de Release</td><td>PM + Líder TIP</td><td>29/09/2026</td></tr>
+      <tr><td class="risk-id">3</td><td>Configuración de la cuenta de Correo Alicapital</td><td>PM + Líder TIP</td><td>30/09/2026</td></tr>
+      <tr><td class="risk-id">4</td><td>Despliegue a productivo FI + HCM</td><td>Veritas + NTT + Alicorp</td><td>30/09/2026</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section-title" style="font-size:16px;margin-top:24px">Alcance</div>
+
+<div class="scope-grid">
+  <div class="scope-card">
+    <h3>Employee Central</h3>
+    <ul>
+      <li>Creación del objeto Legal Entity (Sociedad) y vinculación con la estructura organizativa (Business Unit, Division, Location, Pay Scale).</li>
+      <li>Ajuste de reglas de propagación de datos (Job Information) para transferencias hacia la nueva sociedad.</li>
+      <li>Actualización de workflows de aprobación y de roles y permisos (RBP) para administradores, HRBP y líderes.</li>
+    </ul>
+  </div>
+  <div class="scope-card">
+    <h3>Performance &amp; Goals / Recruiting</h3>
+    <ul>
+      <li>Validación de Position Management Settings: la requisición hereda los atributos de la nueva Legal Entity.</li>
+      <li>Verificación de reglas de aprobación y flujo de firmas en plantillas de requisición.</li>
+      <li>Permisos de campo y RBP, con soporte para aprobadores de otras sociedades (Cross-Company Approvers).</li>
+    </ul>
+  </div>
+  <div class="scope-card">
+    <h3>Integraciones</h3>
+    <ul>
+      <li>Mapeo de la integración con S/4HANA para la nueva sociedad, reutilizando el mapeo actual.</li>
+      <li>Ajuste exclusivo para la nueva sociedad: área de nómina = 99.</li>
+      <li>Documentación de pruebas unitarias y soporte de pruebas de usuario (máx. 1 hora por módulo).</li>
+    </ul>
+  </div>
+  <div class="scope-card out-scope">
+    <h3>Fuera de alcance</h3>
+    <ul>
+      <li>Ajustes de Time Off (perfiles, tipos de ausencia, calendarios festivos, reglas de devengo).</li>
+      <li>Global Assignments y Concurrent Employment.</li>
+      <li>Career Site Builder / RMK, plantillas de oferta y firma digital.</li>
+      <li>Configuración de sociedad en S/4HANA, cambios en CPI y en servicios BIB.</li>
+    </ul>
+  </div>
+</div>
+
+</div>
+
+<div class="tab-panel" id="tab-ppto" hidden>
+  <div class="section-title">Presupuesto — desglose por partida</div>
+  <div class="section-sub">Solo se muestran las partidas con un monto asignado.</div>
+
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Partida</th>
+          <th>Proveedor</th>
+          <th>Alcance</th>
+          <th style="text-align:right">Costo (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Implementación de mejora en SAP – RRHH</td><td><span class="pill">VERITAS</span></td><td class="obs">SuccessFactors: estructura organizativa, workflows, roles y permisos, integración S/4HANA, pruebas y soporte post-productivo.</td><td style="text-align:right">10,880.00</td></tr><tr><td>Implementación de mejora en SAP – FIN</td><td><span class="pill">NTTDATA</span></td><td class="obs">Nueva sociedad FI: parametrizaciones contables, validaciones, creación de CECO, pase a PRD.</td><td style="text-align:right">3,104.38</td></tr><tr><td>Implementación de Accesos</td><td><span class="pill">NTTDATA</span></td><td class="obs">Roles de negocio y derivados, usuarios SAP, sincronización SuccessFactors, carga de roles en GRC.</td><td style="text-align:right">2,775.00</td></tr><tr><td>Adquisición de dominios<div class="link-domain">alicapital.com.pe · alicapital.pe</div></td><td><span class="pill pill-ext">Externo</span></td><td class="obs">Adquisición y configuración de dominios. * No se considera alicapital.com.</td><td style="text-align:right">500.00</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ppto-summary">
+    <div class="dist-card">
+      <div class="dist-title">Distribución del costo por partida</div>
+      <div class="dist-row"><div class="dist-label">VERITAS · SAP RRHH</div><div class="dist-track"><div class="dist-fill" style="width:100.0%"></div></div><div class="dist-value">10,880.00</div></div><div class="dist-row"><div class="dist-label">NTTDATA · SAP FIN</div><div class="dist-track"><div class="dist-fill" style="width:28.5%"></div></div><div class="dist-value">3,104.38</div></div><div class="dist-row"><div class="dist-label">NTTDATA · Accesos</div><div class="dist-track"><div class="dist-fill" style="width:25.5%"></div></div><div class="dist-value">2,775.00</div></div><div class="dist-row"><div class="dist-label">Dominios</div><div class="dist-track"><div class="dist-fill" style="width:4.6%"></div></div><div class="dist-value">500.00</div></div>
+    </div>
+    <div class="totals-card">
+      <div class="totals-row"><span>Subtotal TI (USD)</span><span>17,259.38</span></div>
+      <div class="totals-row contingencia"><span>Contingencia (5%)</span><span>862.97</span></div>
+      <div class="totals-row total"><span>Total proyecto (USD)</span><span>18,122.35</span></div>
+    </div>
+  </div>
+
+  <div class="ppto-footnote">El costo no incluye IGV. Cifras referenciales, sujetas a ajuste en la Declaración de Trabajo (SOW).</div>
+</div>
+
+<div class="tab-panel" id="tab-capacidad" hidden>
+  <div class="section-title">Capacidad de Negocio</div>
+  <div class="section-sub">Roles y responsables del negocio (Alicorp) involucrados en la implementación.</div>
+
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Capacidad de Negocio</th>
+          <th>Persona</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="role-name role-lead">Sponsor</td><td>Giancarlo Rodriguez E.</td></tr><tr><td class="role-name">HRBP</td><td>Luis Abram</td></tr><tr><td class="role-name">KU Administración de Personal</td><td>Cynthia Agurto</td></tr><tr><td class="role-name">KU OM</td><td>Nathalie Paredes</td></tr><tr><td class="role-name">KU Desempeño</td><td>María Arbulu</td></tr><tr><td class="role-name">Líderes de RRHH</td><td>René Villacorta, Gianella Chilet, Martha Castro</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-title" style="margin-top:28px">Capacidad TI asignada</div>
+  <div class="section-sub">Roles internos y externos involucrados en la implementación, con alcance y duración por especialidad. Ordenado de mayor a menor dedicación.</div>
+
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Capacidad TI</th>
+          <th style="text-align:right">%</th>
+          <th>Persona</th>
+          <th>Tipo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="role-name role-lead">Líder TIP / BAE RRHH</td><td style="text-align:right">40%</td><td>Leslie Rodríguez</td><td><span class="pill pill-interno">Interno</span></td></tr><tr><td class="role-name">Project Manager</td><td style="text-align:right">35%</td><td>Banny Solano</td><td><span class="pill">Externo</span></td></tr><tr><td class="role-name">Especialista de procesos Finanzas</td><td style="text-align:right">20%</td><td>Luz Lescano</td><td><span class="pill pill-interno">Interno</span></td></tr><tr><td class="role-name">BAE Finanzas</td><td style="text-align:right">10%</td><td>Ciro Osorio</td><td><span class="pill pill-interno">Interno</span></td></tr><tr><td class="role-name">Especialista en Infraestructura</td><td style="text-align:right">10%</td><td>Vladimir Ríos</td><td><span class="pill pill-interno">Interno</span></td></tr><tr><td class="role-name">Especialista de riesgos</td><td style="text-align:right">10%</td><td>Piero Condemarín</td><td><span class="pill pill-interno">Interno</span></td></tr><tr><td class="role-name">Especialista de procesos HTR</td><td style="text-align:right">10%</td><td>Juleysi Fuentes</td><td><span class="pill pill-interno">Interno</span></td></tr><tr><td class="role-name">Especialista en accesos</td><td style="text-align:right">5%</td><td>Luis Ramírez</td><td><span class="pill pill-interno">Interno</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-tiadm" hidden>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Concepto por cobrar</th>
+          <th>Responsable</th>
+          <th>Costo mensual</th>
+          <th>Observación</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Equipo celular y plan móvil</td><td>Melissa Salazar</td><td>Entre USD 5.9 y USD 16.36</td><td class="obs"><a class="obs-link" href="#plan-detail">Ver cuadro adjunto ↓</a></td></tr><tr><td>Laptop</td><td>Michael Alcazar</td><td>USD 30.00</td><td class="obs"></td></tr><tr><td>Tarjetas corporativas</td><td>Melissa Salazar</td><td>USD 7.00</td><td class="obs">Gasto único.</td></tr><tr><td>Fotocheck</td><td>Rene Villacorta</td><td>USD 3.57</td><td class="obs">Gasto único.</td></tr><tr><td>Licencias de software de usuario Microsoft 365</td><td>Michael Alcazar</td><td>USD 26.75</td><td class="obs">Costo Anual de USD 321 por una cuenta de correo</td></tr><tr><td>Licencia y acceso a SAP Profesional</td><td>Michael Alcazar</td><td class="cost-zero">USD 0.0</td><td class="obs">Sin costo, al ser un costo por usuario funcional incluido en el presupuesto.</td></tr><tr><td>Soporte técnico al usuario y mantenimiento de equipos</td><td>Michael Alcazar</td><td class="cost-zero">USD 0.0</td><td class="obs">No aplica un costo ya que 1 usuario no impacta los servicios contratados.</td></tr><tr><td>Conectividad y acceso a la red corporativa</td><td>Michael Alcazar</td><td class="cost-zero">USD 0.0</td><td class="obs">No aplica un costo ya que no tendrá una impresora asignada de forma dedicada.</td></tr><tr><td>Servicios de infraestructura, hosting y seguridad de TI</td><td>Michael Alcazar</td><td class="cost-zero">USD 0.0</td><td class="obs">No aplica un costo ya que no tendrá una impresora asignada de forma dedicada.</td></tr><tr><td>Servicio de impresión y fotocopiado, de ser aplicable</td><td>Michael Alcazar</td><td class="cost-zero">USD 0.0</td><td class="obs">No aplica un costo ya que no tendrá una impresora asignada de forma dedicada.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="plan-detail" class="detail-block">
+    <div class="section-title" style="font-size:16px">Cuadro adjunto — Equipo celular y plan móvil</div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Nivel</th>
+            <th style="text-align:right">Costo plan</th>
+            <th>Nombre del plan</th>
+            <th style="text-align:right">Costo equipo (sin IGV)</th>
+            <th>Modelo</th>
+            <th style="text-align:right">Costo anual</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Nivel 1</td><td style="text-align:right">S/ 9.54</td><td>Plan elige todo + S/15 C Voz</td><td style="text-align:right">S/ 127.12</td><td>ZTE BLADE A56 PRO 128 GB LTE</td><td style="text-align:right;font-weight:700;color:var(--ink)">S/ 241.60</td></tr><tr><td>Nivel 2</td><td style="text-align:right">S/ 13.70</td><td>Plan B2B Movistar Empresas S/35.90</td><td style="text-align:right">S/ 173.73</td><td>SAMSUNG GXY A07SM A075M 128 GB LTE</td><td style="text-align:right;font-weight:700;color:var(--ink)">S/ 338.13</td></tr><tr><td>Nivel 3</td><td style="text-align:right">S/ 23.70</td><td>Plan B2B Movistar Empresas S/69.90</td><td style="text-align:right">S/ 164.41</td><td>SAMSUNG GXY A07SM A075M 128 GB LTE</td><td style="text-align:right;font-weight:700;color:var(--ink)">S/ 448.81</td></tr><tr><td>Nivel 4</td><td style="text-align:right">S/ 33.87</td><td>Plan B2B Movistar Empresas S/99.90</td><td style="text-align:right">S/ 254.24</td><td>SAMSUNG GXY A17 128 GB LTE</td><td style="text-align:right;font-weight:700;color:var(--ink)">S/ 660.68</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-riesgos" hidden>
+  <div class="section-title">Matriz de Riesgos</div>
+  <div class="section-sub">Probabilidad × Impacto. El puntaje de cada celda define el nivel de severidad del riesgo.</div>
+
+  <div class="risk-layout">
+    <div class="risk-matrix-col">
+      <div class="risk-axis-title-x">Impacto →</div>
+      <div class="risk-matrix-row">
+        <div class="risk-axis-title-y">Probabilidad ↑</div>
+        <div class="risk-matrix">
+          <div class="risk-cell risk-corner"></div><div class="risk-cell risk-axis-x">Bajo</div><div class="risk-cell risk-axis-x">Medio</div><div class="risk-cell risk-axis-x">Alto</div><div class="risk-cell risk-axis-x">Muy Alto</div><div class="risk-cell risk-axis-y">Muy Alta</div><div class="risk-cell risk-mod" title="Probabilidad Muy Alta × Impacto Bajo = 4">4</div><div class="risk-cell risk-high" title="Probabilidad Muy Alta × Impacto Medio = 8">8</div><div class="risk-cell risk-crit" title="Probabilidad Muy Alta × Impacto Alto = 12">12</div><div class="risk-cell risk-crit" title="Probabilidad Muy Alta × Impacto Muy Alto = 16">16</div><div class="risk-cell risk-axis-y">Alta</div><div class="risk-cell risk-low risk-cell-marked" title="R2 — Brecha de conocimiento en OM y Desempeño a reforzar con el equipo de negocio — Probabilidad Alta × Impacto Bajo = 3"><span class="risk-marker">R2</span>3</div><div class="risk-cell risk-mod" title="Probabilidad Alta × Impacto Medio = 6">6</div><div class="risk-cell risk-high risk-cell-marked" title="R1 — Retraso en la transferencia de presupuesto a CECO de TI — Probabilidad Alta × Impacto Alto = 9"><span class="risk-marker">R1</span>9</div><div class="risk-cell risk-crit" title="Probabilidad Alta × Impacto Muy Alto = 12">12</div><div class="risk-cell risk-axis-y">Media</div><div class="risk-cell risk-low" title="Probabilidad Media × Impacto Bajo = 2">2</div><div class="risk-cell risk-mod" title="Probabilidad Media × Impacto Medio = 4">4</div><div class="risk-cell risk-mod" title="Probabilidad Media × Impacto Alto = 6">6</div><div class="risk-cell risk-high" title="Probabilidad Media × Impacto Muy Alto = 8">8</div><div class="risk-cell risk-axis-y">Baja</div><div class="risk-cell risk-low" title="Probabilidad Baja × Impacto Bajo = 1">1</div><div class="risk-cell risk-low" title="Probabilidad Baja × Impacto Medio = 2">2</div><div class="risk-cell risk-low" title="Probabilidad Baja × Impacto Alto = 3">3</div><div class="risk-cell risk-mod" title="Probabilidad Baja × Impacto Muy Alto = 4">4</div>
+        </div>
+      </div>
+    </div>
+    <div class="risk-legend">
+      <div class="item"><span class="swatch-lg risk-low"></span>Bajo (1–3)</div>
+      <div class="item"><span class="swatch-lg risk-mod"></span>Moderado (4–6)</div>
+      <div class="item"><span class="swatch-lg risk-high"></span>Alto (7–9)</div>
+      <div class="item"><span class="swatch-lg risk-crit"></span>Crítico (10–16)</div>
+    </div>
+  </div>
+
+  <div class="risk-register">
+    <div class="dist-title">Registro de riesgos</div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Riesgo</th>
+            <th>Categoría</th>
+            <th>Probabilidad</th>
+            <th>Impacto</th>
+            <th>Severidad</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="risk-id">R1</td>
+            <td>
+              <div class="risk-title">Retraso en la transferencia de presupuesto a CECO de TI</div>
+              <div class="risk-desc">A la fecha, el presupuesto del proyecto aún no ha sido transferido a los Centros de Costo (CECO) de TI correspondientes. De no regularizarse oportunamente, podría generar demoras en el pago a los proveedores (NTT y Veritas Prime), afectando la continuidad de los servicios contratados y el cumplimiento del cronograma.</div>
+            </td>
+            <td>Financiero / Presupuestario</td>
+            <td>Alta</td>
+            <td>Alto</td>
+            <td><span class="risk-sev-pill sev-high">Alto (9)</span></td>
+          </tr>
+          <tr>
+            <td class="risk-id">R2</td>
+            <td>
+              <div class="risk-title">Brecha de conocimiento en OM y Desempeño a reforzar con el equipo de negocio</div>
+              <div class="risk-desc">Se identifica una brecha de conocimiento funcional en Organizational Management (OM) y Desempeño en los Key Users. Se recomienda reforzar esta brecha mediante sesiones de transferencia de conocimiento con el equipo de negocio, de manera que el equipo interno gane autonomía de forma progresiva.</div>
+            </td>
+            <td>Conocimiento y Capacidades</td>
+            <td>Alta</td>
+            <td>Bajo</td>
+            <td><span class="risk-sev-pill sev-low">Bajo (3)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<footer class="page-footer">Implementación de nueva sociedad Alicapital</footer>
+
+</div>
+
+<script>
+  // --- Tab switching ---
+  (function() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.tab;
+        tabBtns.forEach(b => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.tab-panel').forEach(p => {
+          p.hidden = p.id !== `tab-${target}`;
+        });
+      });
+    });
+  })();
+
+  // --- Row hover highlight + task info tooltip ---
+  const TASKS = [{"label": "PROYECTO ALICORP - NUEVA SOCIEDAD ALICAPITAL", "start": "08/09/2026", "end": "01/10/2026", "pct": 80}, {"label": "1.0 Gestión Finanzas S4 HANA", "start": "08/09/2026", "end": "10/09/2026", "pct": 100}, {"label": "1.1 Construcción de Sociedad y CECO", "start": "08/09/2026", "end": "09/09/2026", "pct": 100}, {"label": "1.2 Pruebas de Consultoria", "start": "10/09/2026", "end": "10/09/2026", "pct": 100}, {"label": "2.0 Configuración Employee Central - SuccessFactors", "start": "15/09/2026", "end": "22/09/2026", "pct": 100}, {"label": "2.1 Config. Entidad Legal Alicapital (FO/MDF) y Asociaciones", "start": "15/09/2026", "end": "16/09/2026", "pct": 100}, {"label": "2.2 Reglas Job Info y Workflows (Cese/Recontratación)", "start": "17/09/2026", "end": "18/09/2026", "pct": 100}, {"label": "2.3 Roles y Permisos RBP (Target/Granting Groups)", "start": "21/09/2026", "end": "21/09/2026", "pct": 100}, {"label": "2.4 Pruebas Unitarias EC y Documentación CCB", "start": "22/09/2026", "end": "22/09/2026", "pct": 100}, {"label": "3.0 Performance & Goals (PMGM) - SuccessFactors", "start": "15/09/2026", "end": "22/09/2026", "pct": 100}, {"label": "3.1 Route Maps y Jerarquía Multicompañía", "start": "15/09/2026", "end": "16/09/2026", "pct": 100}, {"label": "3.2 Reglas de Transferencia y Filtros XML", "start": "17/09/2026", "end": "18/09/2026", "pct": 100}, {"label": "3.3 Grupos Dinámicos y Permisos RBP Evaluadores", "start": "21/09/2026", "end": "21/09/2026", "pct": 100}, {"label": "3.4 Pruebas Unitarias PMGM y Documentación CCB", "start": "22/09/2026", "end": "22/09/2026", "pct": 100}, {"label": "4.0 Recruiting Management (RCM) - SuccessFactors", "start": "15/09/2026", "end": "22/09/2026", "pct": 100}, {"label": "4.1 Integración Posición-Requisición y Herencia Atributos", "start": "15/09/2026", "end": "16/09/2026", "pct": 100}, {"label": "4.2 Requisiciones en curso - Alineación", "start": "17/09/2026", "end": "18/09/2026", "pct": 100}, {"label": "4.3 Permisos de Campo y Gobernanza RCM/RBP", "start": "21/09/2026", "end": "21/09/2026", "pct": 100}, {"label": "4.4 Pruebas Unitarias RCM y Documentación CCB", "start": "22/09/2026", "end": "22/09/2026", "pct": 100}, {"label": "5.0 Integraciones (BIB) - SuccessFactors/ S4 HANA", "start": "15/09/2026", "end": "21/09/2026", "pct": 100}, {"label": "5.1 Mapeo Integración S/4HANA (Nuevo Código/CECO)", "start": "15/09/2026", "end": "17/09/2026", "pct": 100}, {"label": "5.2 Ajuste de Regla Área de Nómina = 99", "start": "18/09/2026", "end": "18/09/2026", "pct": 100}, {"label": "5.3 Pruebas Unitarias Integración BIB y Doc. CCB", "start": "21/09/2026", "end": "21/09/2026", "pct": 100}, {"label": "6.0 Pruebas Integradas, UAT, CCB y Cutover", "start": "21/09/2026", "end": "01/10/2026", "pct": 62.5}, {"label": "6.1 Pruebas Unitarias Integradas E2E (Simulación 1 Empleado)", "start": "22/09/2026", "end": "24/09/2026", "pct": 100}, {"label": "6.2 Ventana de Pruebas UAT con Cliente (Máx 1h/mód.)", "start": "25/09/2026", "end": "28/09/2026", "pct": 100}, {"label": "6.3 Presentación y Aprobación Comité de Cambios (CCB)", "start": "29/09/2026", "end": "30/09/2026", "pct": 0}, {"label": "6.4 Cutover y Transporte a Producción", "start": "01/10/2026", "end": "01/10/2026", "pct": 50}, {"label": "GO-LIVE 🏁", "start": "01/10/2026", "end": "01/10/2026", "pct": 0}];
+  (function() {
+    const panel = document.getElementById('final');
+    const tooltip = document.getElementById('taskTooltip');
+
+    function renderTooltip(idx) {
+      const t = TASKS[idx];
+      if (!t) return '';
+      let html = `<div class="tt-title">${t.label}</div>`;
+      html += `<div class="tt-row"><b>Inicio:</b> ${t.start}</div>`;
+      html += `<div class="tt-row"><b>Fin:</b> ${t.end}</div>`;
+      html += `<div class="tt-row"><b>Avance:</b> ${t.pct}%</div>`;
+      return html;
+    }
+    function positionTooltip(e) {
+      const pad = 16;
+      let x = e.clientX + pad;
+      let y = e.clientY + pad;
+      const maxX = window.innerWidth - tooltip.offsetWidth - 8;
+      const maxY = window.innerHeight - tooltip.offsetHeight - 8;
+      if (x > maxX) x = e.clientX - tooltip.offsetWidth - pad;
+      if (y > maxY) y = e.clientY - tooltip.offsetHeight - pad;
+      tooltip.style.left = Math.max(8, x) + 'px';
+      tooltip.style.top = Math.max(8, y) + 'px';
+    }
+
+    panel.querySelectorAll('.row-line, .row-wrap').forEach(el => {
+      el.addEventListener('mouseenter', e => {
+        const idx = el.dataset.row;
+        panel.querySelectorAll(`[data-row="${idx}"]`).forEach(m => m.classList.add('row-hover'));
+        tooltip.innerHTML = renderTooltip(idx);
+        tooltip.style.display = 'block';
+        positionTooltip(e);
+      });
+      el.addEventListener('mousemove', positionTooltip);
+      el.addEventListener('mouseleave', () => {
+        const idx = el.dataset.row;
+        panel.querySelectorAll(`[data-row="${idx}"]`).forEach(m => m.classList.remove('row-hover'));
+        tooltip.style.display = 'none';
+      });
+    });
+  })();
+
+  // --- Collapsible tasks ---
+  (function() {
+    const panel = document.getElementById('final');
+    const rowLines = Array.from(panel.querySelectorAll('.labels-col .row-line'));
+    const rowWraps = Array.from(panel.querySelectorAll('.row-wrap'));
+    const parentOf = {};
+    rowLines.forEach(rl => { parentOf[rl.dataset.row] = rl.dataset.parent; });
+    const collapsed = new Set();
+
+    function isHidden(idx) {
+      let p = parentOf[idx];
+      while (p !== undefined && p !== '-1') {
+        if (collapsed.has(p)) return true;
+        p = parentOf[p];
+      }
+      return false;
+    }
+    function refresh() {
+      rowLines.forEach(rl => { rl.style.display = isHidden(rl.dataset.row) ? 'none' : ''; });
+      rowWraps.forEach(rw => { rw.style.display = isHidden(rw.dataset.row) ? 'none' : ''; });
+    }
+    function collapseAll() {
+      rowLines.forEach(rl => {
+        if (rl.dataset.parent === '-1') return; // el proyecto raíz siempre queda expandido
+        if (rl.querySelector('.caret[data-toggle]')) { collapsed.add(rl.dataset.row); rl.classList.add('collapsed'); }
+      });
+      refresh();
+    }
+    function expandAll() {
+      collapsed.clear();
+      rowLines.forEach(rl => rl.classList.remove('collapsed'));
+      refresh();
+    }
+    panel.querySelectorAll('.caret[data-toggle]').forEach(caret => {
+      caret.addEventListener('click', () => {
+        const idx = caret.getAttribute('data-toggle');
+        const rowLine = caret.closest('.row-line');
+        if (collapsed.has(idx)) { collapsed.delete(idx); rowLine.classList.remove('collapsed'); }
+        else { collapsed.add(idx); rowLine.classList.add('collapsed'); }
+        refresh();
+      });
+    });
+    const collapseAllBtn = panel.querySelector('.collapse-all');
+    if (collapseAllBtn) collapseAllBtn.addEventListener('click', collapseAll);
+    const expandAllBtn = panel.querySelector('.expand-all');
+    if (expandAllBtn) expandAllBtn.addEventListener('click', expandAll);
+
+    // Vista por defecto: solo hitos principales (fases + Go-Live) — las subactividades
+    // quedan a criterio del usuario expandirlas con el caret o "Expandir todo".
+    collapseAll();
+  })();
+
+  // --- Draggable "today" reference line (America/Lima timezone by default) ---
+  const DAY_W = 25.714285714285715;
+  const TOTAL_DAYS = 28;
+  const TIMELINE_START_ISO = '2026-09-07';
+
+  function limaTodayISO() {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+  }
+  function isoToUTC(iso) {
+    const [y, m, dd] = iso.split('-').map(Number);
+    return Date.UTC(y, m - 1, dd);
+  }
+  function dayIndexFromISO(iso) {
+    return Math.round((isoToUTC(iso) - isoToUTC(TIMELINE_START_ISO)) / 86400000);
+  }
+  function isoFromDayIndex(idx) {
+    const dt2 = new Date(isoToUTC(TIMELINE_START_ISO));
+    dt2.setUTCDate(dt2.getUTCDate() + idx);
+    return dt2.toISOString().slice(0, 10);
+  }
+  function formatEs(iso) {
+    const [y, m, dd] = iso.split('-');
+    return `${dd}/${m}/${y}`;
+  }
+
+  const todayISO = limaTodayISO();
+  const todayIdx = dayIndexFromISO(todayISO);
+
+  if (todayIdx >= 0 && todayIdx < TOTAL_DAYS) {
+    const todayDate = new Date(isoToUTC(todayISO));
+    const mondayDate = new Date(todayDate);
+    mondayDate.setUTCDate(mondayDate.getUTCDate() - ((todayDate.getUTCDay() + 6) % 7));
+    const currentWeekISO = mondayDate.toISOString().slice(0, 10);
+    document.querySelectorAll(`.week-cell[data-week="${currentWeekISO}"]`).forEach(el => el.classList.add('current-week'));
+    document.querySelectorAll(`.weekcol[data-week="${currentWeekISO}"]`).forEach(el => el.classList.add('current-week'));
+  }
+  const todayTextEl = document.getElementById('todayText');
+  if (todayTextEl) todayTextEl.textContent = `hoy, ${formatEs(todayISO)} (América/Lima)`;
+
+  const markers = Array.from(document.querySelectorAll('.today-marker'));
+  let currentIdx = Math.max(0, Math.min(todayIdx, TOTAL_DAYS - 1));
+
+  function renderMarkers(idx) {
+    const left = idx * DAY_W + DAY_W / 2;
+    const iso = isoFromDayIndex(idx);
+    const label = (iso === todayISO) ? 'HOY' : formatEs(iso).slice(0, 5);
+    markers.forEach(m => {
+      m.style.left = left + 'px';
+      m.querySelector('.flag').textContent = label;
+      m.classList.add('ready');
+    });
+  }
+  renderMarkers(currentIdx);
+
+  let dragging = false;
+  markers.forEach(m => {
+    m.addEventListener('pointerdown', e => {
+      dragging = true;
+      m.setPointerCapture(e.pointerId);
+      document.body.classList.add('marker-dragging');
+    });
+  });
+  document.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const col = (hit && hit.closest('.timeline-col')) || markers[0].closest('.timeline-col');
+    const rect = col.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    let idx = Math.round((x - DAY_W / 2) / DAY_W);
+    idx = Math.max(0, Math.min(idx, TOTAL_DAYS - 1));
+    if (idx !== currentIdx) {
+      currentIdx = idx;
+      renderMarkers(currentIdx);
+    }
+  });
+  document.addEventListener('pointerup', () => {
+    dragging = false;
+    document.body.classList.remove('marker-dragging');
+  });
+</script>
+
+</body>
+</html>
